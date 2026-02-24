@@ -460,6 +460,12 @@ const Intents = {
         permissions: ['communication.send'],
         risk: 'low',
         runtime: 'whatsapp'
+    },
+    'whatsapp.contacts': {
+        schema: z.object({}),
+        permissions: ['system.read'],
+        risk: 'low',
+        runtime: 'whatsapp'
     }
 };
 

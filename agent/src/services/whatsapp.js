@@ -286,6 +286,20 @@ class WhatsAppService {
         };
     }
 
+    /** Get all known contacts from cache. */
+    getContacts() {
+        const contacts = [];
+        for (const [jid, name] of Object.entries(this.contacts)) {
+            // Skip group JIDs and status broadcasts
+            if (jid.includes('@g.us') || jid === 'status@broadcast') continue;
+            const number = this._formatJid(jid);
+            contacts.push({ name, number, jid });
+        }
+        // Sort alphabetically by name
+        contacts.sort((a, b) => a.name.localeCompare(b.name));
+        return contacts;
+    }
+
     /** Disconnect from WhatsApp. */
     async disconnect() {
         if (this.socket) {

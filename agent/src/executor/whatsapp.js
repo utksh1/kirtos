@@ -13,6 +13,8 @@ class WhatsAppExecutor {
                 return this._read(params.number, params.limit);
             case 'whatsapp.disconnect':
                 return await this._disconnect();
+            case 'whatsapp.contacts':
+                return this._listContacts();
             default:
                 throw new Error(`WhatsAppExecutor: Unsupported intent "${intent}"`);
         }
@@ -130,6 +132,29 @@ class WhatsAppExecutor {
         return {
             status: 'success',
             message: 'WhatsApp disconnected.'
+        };
+    }
+
+    _listContacts() {
+        const contacts = whatsapp.getContacts();
+
+        if (contacts.length === 0) {
+            return {
+                status: 'success',
+                message: 'No contacts found yet. Contacts are learned from incoming messages — try reading your messages first.',
+                contacts: []
+            };
+        }
+
+        const contactList = contacts.map((c, i) =>
+            `${i + 1}. ${c.name} (${c.number})`
+        ).join('\n');
+
+        return {
+            status: 'success',
+            count: contacts.length,
+            summary: `You have ${contacts.length} WhatsApp contacts:\n${contactList}`,
+            contacts
         };
     }
 }

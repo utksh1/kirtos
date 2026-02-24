@@ -221,6 +221,17 @@ TRAINING_DATA = {
         "end whatsapp session", "sign out of whatsapp",
     ],
 
+    "whatsapp.contacts": [
+        "list all contacts on whatsapp", "show my whatsapp contacts",
+        "whatsapp contacts", "who can i message on whatsapp",
+        "list whatsapp contacts", "show contacts on whatsapp",
+        "my whatsapp contacts", "all contacts whatsapp",
+        "show all contacts on whatsapp", "who do i know on whatsapp",
+        "whatsapp contact list", "get my whatsapp contacts",
+        "list people on whatsapp", "show me my whatsapp contacts",
+        "which contacts are on whatsapp",
+    ],
+
     # ── System ────────────────────────────────────────
     "system.status": [
         "system status", "how is the system", "system health", "system info",
