@@ -41,10 +41,24 @@ class IntelligenceService {
     }
 
     async parseIntent(text, history = []) {
+        // 1. Try regex-based fast classifier first (~1ms)
         const fastResult = fastClassify(text);
         if (fastResult) {
             console.log(`[Fast] "${text}" → ${fastResult.intent}`);
             return fastResult;
+        }
+
+        // 2. Try local NLP classifier (~5ms, offline)
+        const nlpResult = await this._nlpClassify(text);
+        if (nlpResult && nlpResult.confidence > 0.03) {
+            console.log(`[NLP] "${text}" → ${nlpResult.intent} (${(nlpResult.confidence * 100).toFixed(0)}%)`);
+            return {
+                intent: nlpResult.intent,
+                params: this._extractParamsFromText(text, nlpResult.intent),
+                confidence: nlpResult.confidence,
+                reasoning: `NLP classified as ${nlpResult.intent}`,
+                source: 'nlp'
+            };
         }
 
         if (!this.client) {
@@ -155,6 +169,97 @@ STRATEGY:
                 reasoning: `I'm having trouble retrieving that. (Error: ${err.message})`
             };
         }
+    }
+
+    /**
+     * Call the local Python NLP classifier server.
+     * Returns null if the server is unreachable.
+     */
+    async _nlpClassify(text) {
+        try {
+            const controller = new AbortController();
+            const timeout = setTimeout(() => controller.abort(), 500); // 500ms max
+            const resp = await fetch('http://127.0.0.1:5050/classify', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ text }),
+                signal: controller.signal
+            });
+            clearTimeout(timeout);
+            if (!resp.ok) return null;
+            return await resp.json();
+        } catch {
+            return null; // Server not running — silently fall through to LLM
+        }
+    }
+
+    /**
+     * Extract basic params from text based on the predicted intent.
+     * The NLP model only predicts intent, not params — this fills them in.
+     */
+    _extractParamsFromText(text, intent) {
+        const lower = text.toLowerCase().trim();
+
+        if (intent === 'whatsapp.send') {
+            // Try to extract "to <name> ... <message>"
+            const m = lower.match(/(?:to\s+)?([\w\s]+?)\s+(?:on\s+)?(?:whatsapp|wa|whatapp|watsapp)\s+(?:that\s+|saying\s+)?(.+)/i);
+            if (m) return { number: m[1].trim(), message: m[2].trim() };
+            return { number: '', message: text };
+        }
+
+        if (intent === 'browser.search') {
+            const q = lower.replace(/^(?:search|google|look up|find)\s+(?:for\s+)?/i, '').trim();
+            return { query: q || text, engine: 'google' };
+        }
+
+        if (intent === 'browser.open') {
+            const url = lower.replace(/^(?:open|go to|visit|navigate to|browse to)\s+/i, '').trim();
+            return { url };
+        }
+
+        if (intent === 'browser.play_youtube') {
+            const q = lower.replace(/^(?:play|watch)\s+/i, '').replace(/\s*(?:on\s+)?youtube\s*/i, '').trim();
+            return { query: q };
+        }
+
+        if (intent === 'system.volume.set') {
+            const m = lower.match(/(\d+)/);
+            return { level: m ? parseInt(m[1]) : 50 };
+        }
+
+        if (intent === 'system.brightness.set') {
+            const m = lower.match(/(\d+)/);
+            return { level: m ? parseInt(m[1]) : 50 };
+        }
+
+        if (intent === 'system.app.open' || intent === 'device.open_app') {
+            const app = lower.replace(/^(?:open|launch|start)\s+(?:the\s+)?(?:app\s+)?/i, '').trim();
+            return { app };
+        }
+
+        if (intent === 'knowledge.search') {
+            const q = lower
+                .replace(/^(?:what is|who is|tell me about|explain|define|search wikipedia for|wikipedia)\s+/i, '')
+                .replace(/\?$/, '').trim();
+            return { query: q || text };
+        }
+
+        if (intent === 'communication.send_message') {
+            const m = lower.match(/(?:to\s+)?(\w[\w\s]*?)\s+(?:saying\s+|that\s+)?(.+)/i);
+            if (m) return { to: m[1].trim(), message: m[2].trim() };
+            return { to: '', message: text };
+        }
+
+        if (intent === 'chat.message') {
+            return { text };
+        }
+
+        if (intent === 'shell.exec') {
+            const cmd = lower.replace(/^(?:run|execute)\s+(?:command\s+)?/i, '').replace(/\s+in\s+(?:the\s+)?terminal\s*$/i, '').trim();
+            return { command: cmd };
+        }
+
+        return {};
     }
 
     async summarizeOutcome(originalText, intent, result, reasoning, params = {}) {

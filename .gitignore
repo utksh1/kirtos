@@ -14,6 +14,12 @@ package-lock.json
 # --- WhatsApp Auth (session credentials) ---
 .whatsapp-auth/
 
+# --- Python / NLP ---
+.venv/
+__pycache__/
+*.pyc
+agent/nlp/intent_model.pkl
+
 # --- Build Output ---
 dist/
 dist-ssr/
