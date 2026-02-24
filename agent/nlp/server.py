@@ -36,15 +36,9 @@ class ClassifyResponse(BaseModel):
 async def classify(request: ClassifyRequest):
     text = request.text.lower().strip()
 
-    # Predict
+    # Predict with calibrated probabilities
     prediction = pipeline.predict([text])[0]
-
-    # Get decision function scores for all classes
-    decision_scores = pipeline.decision_function([text])[0]
-
-    # Convert to pseudo-probabilities using softmax-like normalization
-    exp_scores = np.exp(decision_scores - np.max(decision_scores))
-    probabilities = exp_scores / exp_scores.sum()
+    probabilities = pipeline.predict_proba([text])[0]
 
     # Get top prediction confidence
     pred_idx = np.where(intent_labels == prediction)[0][0]
@@ -70,7 +64,7 @@ async def classify(request: ClassifyRequest):
 async def health():
     return {
         "status": "ok",
-        "model": "tfidf-linearsvc",
+        "model": "tfidf-calibrated-linearsvc",
         "intents": len(intent_labels),
         "model_size_kb": round(os.path.getsize(MODEL_PATH) / 1024)
     }
