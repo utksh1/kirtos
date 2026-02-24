@@ -45,6 +45,37 @@ TRAINING_DATA = {
         "let's have a conversation", "just wanna talk", "I need someone to talk to",
         "what should i eat today", "should i go out today", "what do you recommend",
         "whats new", "anything interesting happening", "is AI taking over the world",
+        # ── GeniSys Dataset — Conversational ──
+        "my user is adam", "this is adam", "i am adam", "it is adam",
+        "my user is bella", "this is bella", "i am bella", "it is bella",
+        "how are you doing", "hope you are doing well",
+        "good thanks my user is adam", "great thanks this is bella",
+        "what is my name", "what do you call me", "who do you think I am",
+        "what do you think I am", "who are you talking to",
+        "what name do you call me by", "tell me my name",
+        "what is your name", "what could I call you", "what can I call you",
+        "what do your friends call you", "tell me your name",
+        "what is your real name", "your real name", "your real name please",
+        "OK thank you", "OK thanks", "OK", "thanks", "that's helpful",
+        "I am not talking to you", "I was not talking to you",
+        "not talking to you", "wasn't for you", "wasn't meant for you",
+        "do you understand what I am saying", "do you understand me",
+        "do you know what I am saying", "do you get me", "comprendo",
+        "know what I mean",
+        "be quiet", "stop talking", "enough talking", "please be quiet", "shhh",
+        "bye", "adios", "goodbye",
+        "thanks bye", "thanks for the help goodbye", "thank you bye",
+        "thank you goodbye", "thanks goodbye",
+        "can you see me", "do you see me", "identify me", "who am I please",
+        "you are very clever", "you are very intelligent", "you are a genius",
+        "clever girl", "genius",
+        "can you prove you are self-aware", "can you prove you are self aware",
+        "can you prove you have a conscious", "prove you have a conscious",
+        "I am bored gossip with me", "got any gossip",
+        "I want to hear some gossip", "tell me some gossip",
+        "any gossip", "tell me some more gossip",
+        "open the pod bay door", "pod bay door",
+        "why not", "surely you can", "tell me why",
     ],
 
     "query.greet": [
@@ -53,6 +84,11 @@ TRAINING_DATA = {
         "hi there", "good afternoon", "hey buddy", "hey there kirtos",
         "what's going on", "how do you do", "hey assistant", "morning",
         "evening", "hi bot", "hello assistant", "hey AI",
+        # ── GeniSys Dataset — Greetings ──
+        "hya", "hya there", "hello there",
+        "hi how are you", "hello how are you", "hola how are you",
+        "how are you doing", "hope you are doing well",
+        "hello hope you are doing well",
     ],
 
     "query.time": [
@@ -62,6 +98,9 @@ TRAINING_DATA = {
         "can you tell me the time", "what's the clock say", "check the time",
         "time right now", "what hour is it", "do you know the time",
         "time check", "whats the current time", "time kya hai",
+        # ── GeniSys Dataset — Time ──
+        "what is the time", "do you know what time it is",
+        "tell me what time it is", "time",
     ],
 
     "query.help": [
@@ -299,6 +338,10 @@ TRAINING_DATA = {
         "tell me a funny joke", "any good jokes", "joke time",
         "make me smile", "something humorous", "entertain me with a joke",
         "do you know any jokes", "tell a funny story",
+        # ── GeniSys Dataset — Joke Requests ──
+        "how about a joke", "i need cheering up",
+        "cheer me up", "say a joke", "got a joke for me",
+        "know any good jokes", "joke", "jokes please",
     ],
 
     # ── Media ─────────────────────────────────────────
