@@ -1,0 +1,10 @@
+# Antigravity project configuration
+name: "gg-assistant"
+version: "0.1.0"
+description: "A local-first, voice-driven system agent for macOS"
+zones:
+  - ui
+  - transport
+  - intelligence
+  - core
+  - response

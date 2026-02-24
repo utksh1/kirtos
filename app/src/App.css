@@ -1,0 +1,314 @@
+/* Outfit font loaded via <link rel="preload"> in index.html — no render-blocking @import */
+
+.minimal-workspace {
+    --minimal-accent: #00f2fe;
+    --minimal-purple: #7000ff;
+    --minimal-bg: #030303;
+    --minimal-glass: rgba(255, 255, 255, 0.03);
+    --minimal-border: rgba(255, 255, 255, 0.08);
+
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    padding: 2rem;
+    font-family: 'Outfit', sans-serif;
+    color: #fff;
+    background: var(--minimal-bg);
+    position: relative;
+    overflow: hidden;
+}
+
+.mesh-gradient {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 100vw;
+    height: 100vh;
+    background: radial-gradient(circle at 50% 50%, rgba(112, 0, 255, 0.05) 0%, transparent 60%),
+        radial-gradient(circle at 80% 20%, rgba(0, 242, 254, 0.03) 0%, transparent 40%);
+    pointer-events: none;
+    z-index: 0;
+    will-change: transform;
+    /* Promote to GPU layer */
+    contain: strict;
+    /* Fully isolate from document flow */
+}
+
+.minimal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    z-index: 10;
+    margin-bottom: 2rem;
+}
+
+.brand {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.accent-icon {
+    color: var(--minimal-accent);
+    filter: drop-shadow(0 0 8px var(--minimal-accent));
+}
+
+.brand h1 {
+    font-size: 1.25rem;
+    font-weight: 800;
+    letter-spacing: 0.1em;
+    margin: 0;
+}
+
+.brand h1 span {
+    color: var(--minimal-accent);
+}
+
+.status-tag {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.4rem 0.8rem;
+    background: var(--minimal-glass);
+    border: 1px solid var(--minimal-border);
+    border-radius: 100px;
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+}
+
+.status-tag.connected {
+    color: var(--minimal-accent);
+}
+
+.status-tag.disconnected {
+    color: #ff4b4b;
+}
+
+.status-tag .dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: currentColor;
+    box-shadow: 0 0 8px currentColor;
+}
+
+.core-content {
+    flex: 1;
+    display: grid;
+    grid-template-columns: 1fr 1.2fr;
+    gap: 5rem;
+    max-width: 1500px;
+    margin: 0 auto;
+    width: 100%;
+    z-index: 5;
+    align-items: center;
+    padding: 2rem;
+}
+
+/* Voice Stage */
+.voice-stage {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2.5rem;
+    width: 100%;
+}
+
+.orb-wrapper {
+    position: relative;
+    width: 500px;
+    height: 500px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    contain: strict;
+    /* WebGL canvas — fully isolated from reflows */
+}
+
+.main-orb {
+    width: 100% !important;
+    height: 100% !important;
+    scale: 1.1;
+    filter: drop-shadow(0 0 50px rgba(112, 0, 255, 0.12));
+}
+
+.voice-trigger {
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    border: 1px solid var(--minimal-border);
+    background: var(--minimal-glass);
+    color: rgba(255, 255, 255, 0.4);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    backdrop-filter: blur(12px);
+    transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    z-index: 10;
+    margin-top: -20px;
+    /* Slight overlap for better integration */
+    margin-bottom: 0.5rem;
+}
+
+.voice-trigger:hover {
+    transform: scale(1.1);
+    border-color: var(--minimal-accent);
+    color: var(--minimal-accent);
+}
+
+.voice-trigger.listening {
+    background: rgba(255, 75, 75, 0.1);
+    border-color: #ff4b4b;
+    color: #ff4b4b;
+}
+
+.stage-caption {
+    font-size: 0.85rem;
+    font-weight: 700;
+    letter-spacing: 0.3em;
+    color: rgba(255, 255, 255, 0.2);
+    text-transform: uppercase;
+}
+
+/* Chat Stage */
+.chat-stage {
+    height: 80vh;
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+}
+
+.chat-container {
+    flex: 1;
+    background: var(--minimal-glass);
+    border: 1px solid var(--minimal-border);
+    border-radius: 32px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    backdrop-filter: blur(20px);
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.3);
+    contain: layout style paint;
+    /* Isolate chat reflows from rest of page */
+}
+
+.message-list {
+    flex: 1;
+    padding: 1.5rem;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.message-bubble {
+    max-width: 80%;
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    animation: slideUp 0.4s ease-out;
+    will-change: transform, opacity;
+    /* Optimise slideUp animation */
+}
+
+.message-bubble.agent {
+    align-self: flex-start;
+}
+
+.message-bubble.user {
+    align-self: flex-end;
+}
+
+.bubble-content {
+    padding: 0.8rem 1.2rem;
+    border-radius: 16px;
+    font-size: 0.9rem;
+    line-height: 1.5;
+}
+
+.agent .bubble-content {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid var(--minimal-border);
+    color: rgba(255, 255, 255, 0.9);
+}
+
+.user .bubble-content {
+    background: var(--minimal-purple);
+    color: #fff;
+}
+
+.bubble-meta {
+    font-size: 0.65rem;
+    color: rgba(255, 255, 255, 0.2);
+    margin: 0 0.5rem;
+}
+
+.input-strip {
+    padding: 1rem 1.5rem;
+    background: rgba(0, 0, 0, 0.2);
+    border-top: 1px solid var(--minimal-border);
+}
+
+.strip-inner {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid var(--minimal-border);
+    padding: 0.4rem 0.8rem;
+    border-radius: 12px;
+}
+
+.strip-inner input {
+    flex: 1;
+    background: transparent;
+    border: none;
+    color: #fff;
+    font-size: 0.9rem;
+    outline: none;
+    padding: 0.6rem 0;
+}
+
+.strip-icon {
+    color: rgba(255, 255, 255, 0.2);
+}
+
+.send-trigger {
+    background: var(--minimal-accent);
+    color: #000;
+    border: none;
+    border-radius: 8px;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+}
+
+@keyframes slideUp {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@media (max-width: 1024px) {
+    .core-content {
+        grid-template-columns: 1fr;
+        gap: 2rem;
+        padding-bottom: 2rem;
+    }
+
+    .chat-stage {
+        height: 40vh;
+    }
+}
