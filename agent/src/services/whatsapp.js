@@ -24,7 +24,7 @@ class WhatsAppService {
         this.qrDisplayed = false;
         this.messageStore = [];
         this.contacts = {};      // JID → display name cache
-        this.MAX_STORE = 100;
+        this.MAX_STORE = 500;
     }
 
     /** Format a JID into a clean phone number. */
@@ -262,7 +262,7 @@ class WhatsAppService {
      * @param {string} [fromNumber] - Optional filter by sender name or number
      * @param {number} [limit=10] - Number of messages to return
      */
-    getRecentMessages(fromNumber, limit = 10) {
+    getRecentMessages(fromNumber, limit = 50) {
         let messages = this.messageStore;
 
         if (fromNumber) {

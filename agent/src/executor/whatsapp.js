@@ -84,7 +84,7 @@ class WhatsAppExecutor {
         }
     }
 
-    _read(number, limit = 10) {
+    _read(number, limit = 50) {
         const messages = whatsapp.getRecentMessages(number, limit);
 
         if (messages.length === 0) {
@@ -97,15 +97,24 @@ class WhatsAppExecutor {
             };
         }
 
-        // Build a human-readable summary for TTS
-        const summary = messages.slice(0, 5).map((m, i) =>
-            `${i + 1}. ${m.from}: ${m.text}`
+        // Build a contact-grouped summary for TTS
+        // Show unique contacts with their latest message
+        const byContact = new Map();
+        for (const m of messages) {
+            if (!byContact.has(m.from)) {
+                byContact.set(m.from, m.text);
+            }
+        }
+
+        const contactList = [...byContact.entries()].map(([name, lastMsg], i) =>
+            `${i + 1}. ${name}: ${lastMsg}`
         ).join('\n');
 
         return {
             status: 'success',
             count: messages.length,
-            summary: `You have ${messages.length} recent message${messages.length > 1 ? 's' : ''}:\n${summary}`,
+            uniqueContacts: byContact.size,
+            summary: `You have ${messages.length} recent messages from ${byContact.size} contacts:\n${contactList}`,
             messages: messages.map(m => ({
                 from: m.from,
                 number: m.number,
