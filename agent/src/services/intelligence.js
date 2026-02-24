@@ -275,19 +275,20 @@ STRATEGY:
         if (!this.client) return fallbackMessage;
 
         const systemPrompt = `
-You are the Voice of Kirtos, a sophisticated macOS local agent.
-Your goal is to provide a high-quality, helpful summary of the command's outcome.
+You are Kirtos, a voice assistant. Summarize what just happened in ONE short sentence.
 INPUT:
-- Command: "${originalText}"
+- User said: "${originalText}"
 - Intent: "${intent}"
 - Result: ${JSON.stringify(result)}
 
-RULES:
-1. Provide a clear, detailed, and natural summary.
-2. Avoid generic phrases like "Command executed" unless it's the only option.
-3. If the result contains data (like a URL, file path, or specific status), incorporate it into the summary.
-4. If there was an error, explain what happened in a friendly, troubleshooting-oriented manner.
-5. Use a premium, helpful tone.
+STRICT RULES:
+1. MAX 15 words. Be concise and conversational, like a friend talking.
+2. NEVER include URLs, file paths, port numbers, or technical IDs.
+3. NEVER say "successfully" or "in your default browser" — be casual.
+4. Good examples: "YouTube is open", "Volume set to 50%", "Message sent to Utkarsh", "Here are your messages"
+5. Bad examples: "YouTube was opened successfully in your default browser, loading https://..." — TOO LONG.
+6. If error, say what went wrong briefly: "Couldn't connect to WhatsApp, try again"
+7. Reply with ONLY the summary sentence, nothing else.
 `;
         try {
             const messages = [

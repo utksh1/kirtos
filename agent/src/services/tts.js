@@ -29,19 +29,42 @@ class TTSService {
     }
 
     /**
+     * Cleans text for TTS — strips URLs, file paths, and technical noise.
+     */
+    _cleanForSpeech(text) {
+        return text
+            // Remove URLs (http/https/www)
+            .replace(/https?:\/\/[^\s,)]+/gi, '')
+            .replace(/www\.[^\s,)]+/gi, '')
+            // Remove file paths (/Users/..., ~/..., ./...)
+            .replace(/(?:~|\.)?\/[\w\-./]+/g, '')
+            // Remove port numbers like :3001, :5050
+            .replace(/:\d{2,5}/g, '')
+            // Clean up leftover artifacts
+            .replace(/\s{2,}/g, ' ')          // collapse multiple spaces
+            .replace(/,\s*,/g, ',')           // collapse double commas
+            .replace(/\(\s*\)/g, '')          // remove empty parens
+            .replace(/^\s*[,.\s]+/, '')       // leading punctuation
+            .replace(/[,.\s]+\s*$/, '')       // trailing punctuation
+            .trim();
+    }
+
+    /**
      * Converts text to speech.
      */
     async speak(text) {
         // Stop any currently playing audio before starting new one
         this.stop();
 
-        // if (!this.client) return { error: 'TTS Service not configured' };
+        // Clean up text for voice output
+        const cleaned = this._cleanForSpeech(text);
+        const spoken = cleaned || text; // fallback to original if cleaning nukes everything
 
         // Fallback to macOS native 'say' command for local playback
-        console.log(`TTS Speaking: ${text}`);
+        console.log(`TTS Speaking: ${spoken}`);
         return new Promise((resolve) => {
             const { spawn } = require('child_process');
-            const child = spawn('say', [text]);
+            const child = spawn('say', [spoken]);
 
             this.activeProcess = child;
 
