@@ -36,6 +36,10 @@ The `StateManager` MUST NOT commit state updates for an operation that failed or
 Every generated `auditTrace` (Flight Recorder entry) MUST include the current `capability_fingerprint` of the `IntentRegistry`. This ensures that any audit log can be resolved to the exact security configuration active at the time of the event.
 *   **Enforcement**: `agent/index.js` audit trace generation.
 
+### I9: Screen Capture MUST be Path-Isolated and Sanitized
+The `ScreenExecutor` MUST only write files to the pre-defined `SCREENSHOT_DIR`. Any `filename_hint` provided by the model MUST be stripped of path separators and normalized to alphanumeric characters, hyphens, and underscores to prevent path traversal or filesystem clutter.
+*   **Enforcement**: `agent/src/executor/screen.js` validation loop.
+
 ## Enforcing Invariants in CI
 - **Unit Tests**: `test/invariants/*.js` must pass 100%.
 - **Boot Checks**: `IntentRegistry` verifies domain contracts (risk floors/ceilings) on startup.
