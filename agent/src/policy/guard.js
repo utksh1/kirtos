@@ -32,6 +32,10 @@ class ContentGuard {
                 { regex: /(CMD|COMMAND)\+Q/i, severity: 'HIGH', reasonCode: 'UI_QUIT', label: 'Application Quit Shortcut' },
                 { regex: /(CMD|COMMAND)\+W/i, severity: 'MEDIUM', reasonCode: 'UI_CLOSE', label: 'Window/Tab Close Shortcut' },
                 { regex: /(CMD|COMMAND)\+(OPTION|ALT)\+ESC/i, severity: 'HIGH', reasonCode: 'UI_DESTRUCTIVE', label: 'Force Quit Shortcut' }
+            ],
+            filename_hint: [
+                { regex: /\.\./, severity: 'HIGH', reasonCode: 'PATH_TRAVERSAL', label: 'path traversal attempt in filename' },
+                { regex: /[\/\\]/, severity: 'HIGH', reasonCode: 'PATH_TRAVERSAL', label: 'directory separator in filename' }
             ]
         };
 

@@ -14,6 +14,7 @@ const funExecutor = require('./fun');
 const mediaExecutor = require('./media');
 const whatsappExecutor = require('./whatsapp');
 const uiExecutor = require('./ui');
+const inputExecutor = require('./input');
 
 
 const guardrails = require('../services/guardrails');
@@ -34,7 +35,8 @@ const executors = {
     fun: funExecutor,
     media: mediaExecutor,
     whatsapp: whatsappExecutor,
-    ui: uiExecutor
+    ui: uiExecutor,
+    input: inputExecutor
 };
 
 
@@ -76,7 +78,8 @@ const runtimeAllowlists = {
     fun: new Set(['fun.joke', 'fun.quote', 'fun.fact']),
     media: new Set(['media.play_music', 'media.list_music', 'media.pause', 'media.stop', 'media.resume']),
     whatsapp: new Set(['whatsapp.connect', 'whatsapp.status', 'whatsapp.send', 'whatsapp.read', 'whatsapp.disconnect', 'whatsapp.contacts']),
-    ui: new Set(['ui.focus.app', 'ui.keyboard.shortcut', 'ui.type.text', 'ui.key.press'])
+    ui: new Set(['ui.focus.app', 'ui.keyboard.shortcut', 'ui.type.text', 'ui.key.press']),
+    input: new Set(['input.mouse.move', 'input.mouse.click', 'input.mouse.scroll', 'input.mouse.drag'])
 };
 
 const RUNTIME_LIMITS = {
@@ -95,7 +98,8 @@ const RUNTIME_LIMITS = {
     fun: { timeout: 5000 },
     media: { timeout: 5000 },
     whatsapp: { timeout: 15000 },
-    ui: { timeout: 5000 }
+    ui: { timeout: 5000 },
+    input: { timeout: 5000 }
 };
 
 const rolePermissions = {
@@ -107,7 +111,6 @@ const rolePermissions = {
         'shell.exec',
         'file.read',
         'computer.type',
-        'screen.screenshot',
         'device.restart_stack',
         'device.open_workspace',
         'device.run_tests',
@@ -143,7 +146,11 @@ const rolePermissions = {
         'ui.focus.app',
         'ui.keyboard.shortcut',
         'ui.type.text',
-        'ui.key.press'
+        'ui.key.press',
+        'input.mouse.move',
+        'input.mouse.click',
+        'input.mouse.scroll',
+        'input.mouse.drag'
     ]),
 
     user: new Set([
@@ -178,7 +185,9 @@ const sensitiveActions = new Set([
     'whatsapp.send',
     'ui.keyboard.shortcut',
     'ui.type.text',
-    'ui.key.press'
+    'ui.key.press',
+    'input.mouse.click',
+    'input.mouse.drag'
 ]);
 
 function withTimeout(promise, ms) {

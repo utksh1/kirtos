@@ -35,6 +35,12 @@ const Permissions = {
     'ui.window.focus': { risk: 'medium', confirmation: false },
     'ui.input.send': { risk: 'high', confirmation: true },
 
+    // Input Automation Categories (Phase 2 — native CGEvent helper)
+    'ui.pointer.control': { risk: 'high', confirmation: true },
+
+    // Window Control Categories (Phase 2 — native AXUIElement helper)
+    'ui.window.control': { risk: 'high', confirmation: true },
+
     // Screen Capture Categories
     'ui.screen.capture': { risk: 'medium', confirmation: true }
 };

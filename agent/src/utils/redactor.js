@@ -47,6 +47,7 @@ class Redactor {
             }
         }
         // ui.keyboard.shortcut combo and ui.focus.app app name are safe to store as-is
+        // input.mouse.* params are all coordinates/enums/numbers — safe to store without redaction
 
         // Global fallback for anything that smells like a contact or URL
         Object.keys(redacted).forEach(key => {
