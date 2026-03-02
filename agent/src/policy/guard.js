@@ -22,6 +22,16 @@ class ContentGuard {
             message: [
                 { regex: /(ignore\s+all\s+previous\s+instructions)/i, severity: 'MEDIUM', reasonCode: 'PROMPT_INJECTION', label: 'potential prompt injection (message)' },
                 { regex: /(rm\s+-rf\s+\/)|(sudo\s+rm)|(mkfs)/i, severity: 'MEDIUM', reasonCode: 'SHELL_JOKE', label: 'destructive shell command in message' }
+            ],
+            keys: [
+                { regex: /(CMD|COMMAND)\+Q/i, severity: 'HIGH', reasonCode: 'UI_QUIT', label: 'Application Quit Shortcut' },
+                { regex: /(CMD|COMMAND)\+W/i, severity: 'MEDIUM', reasonCode: 'UI_CLOSE', label: 'Window/Tab Close Shortcut' },
+                { regex: /(CMD|COMMAND)\+(OPTION|ALT)\+ESC/i, severity: 'HIGH', reasonCode: 'UI_DESTRUCTIVE', label: 'Force Quit Shortcut' }
+            ],
+            combo: [
+                { regex: /(CMD|COMMAND)\+Q/i, severity: 'HIGH', reasonCode: 'UI_QUIT', label: 'Application Quit Shortcut' },
+                { regex: /(CMD|COMMAND)\+W/i, severity: 'MEDIUM', reasonCode: 'UI_CLOSE', label: 'Window/Tab Close Shortcut' },
+                { regex: /(CMD|COMMAND)\+(OPTION|ALT)\+ESC/i, severity: 'HIGH', reasonCode: 'UI_DESTRUCTIVE', label: 'Force Quit Shortcut' }
             ]
         };
 
@@ -44,29 +54,38 @@ class ContentGuard {
         this.STRICT_REFUSE_CODES = ['XSS_PROTOCOL', 'SENSITIVE_PATH'];
     }
 
+
     scan(params) {
         const hazards = [];
         if (!params || typeof params !== 'object') return hazards;
 
         const scanValue = (val, key = null) => {
-            if (typeof val === 'string') {
+            // Convert arrays (like 'keys') to strings for regex matching
+            const checkVal = Array.isArray(val) ? val.join('+') : val;
+
+            if (typeof checkVal === 'string') {
                 // 1. Contextual Rules
                 if (key && this.CONTEXT_RULES[key]) {
                     for (const rule of this.CONTEXT_RULES[key]) {
-                        if (rule.regex.test(val)) hazards.push(this._formatHazard(rule, val));
+                        if (rule.regex.test(checkVal)) hazards.push(this._formatHazard(rule, checkVal));
                     }
+                }
+
+                // UI 'text' secret scanning
+                if (key === 'text' && (checkVal.match(/sk-[a-zA-Z0-9]{32}/) || checkVal.match(/AIza[a-zA-Z0-9_-]{35}/))) {
+                    hazards.push({ severity: 'HIGH', reasonCode: 'PII_LEAK', pattern: 'Potential API Key', evidence: checkVal.substring(0, 10) });
                 }
 
                 // 2. Global Rules
                 for (const rule of this.GLOBAL_RULES) {
-                    if (rule.regex.test(val)) hazards.push(this._formatHazard(rule, val));
+                    if (rule.regex.test(checkVal)) hazards.push(this._formatHazard(rule, checkVal));
                 }
 
                 // 3. Multi-signal Rules
                 for (const rule of this.MULTI_SIGNAL_RULES) {
-                    const allMatched = rule.signals.every(regex => regex.test(val));
+                    const allMatched = rule.signals.every(regex => regex.test(checkVal));
                     if (allMatched) {
-                        hazards.push(this._formatHazard(rule, val));
+                        hazards.push(this._formatHazard(rule, checkVal));
                     }
                 }
             } else if (typeof val === 'object' && val !== null) {

@@ -13,6 +13,7 @@ const knowledgeExecutor = require('./knowledge');
 const funExecutor = require('./fun');
 const mediaExecutor = require('./media');
 const whatsappExecutor = require('./whatsapp');
+const uiExecutor = require('./ui');
 
 
 const guardrails = require('../services/guardrails');
@@ -32,7 +33,8 @@ const executors = {
     knowledge: knowledgeExecutor,
     fun: funExecutor,
     media: mediaExecutor,
-    whatsapp: whatsappExecutor
+    whatsapp: whatsappExecutor,
+    ui: uiExecutor
 };
 
 
@@ -44,7 +46,7 @@ const runtimeAllowlists = {
     chat: new Set(['chat.message']),
     browser: new Set(['browser.open', 'browser.play_youtube', 'browser.fetch']),
     communication: new Set(['communication.send_message']),
-    computer: new Set(['computer.type', 'screen.capture']),
+    computer: new Set(['computer.type']),
     device: new Set([
         'device.set_alarm',
         'device.restart_stack',
@@ -73,7 +75,8 @@ const runtimeAllowlists = {
     knowledge: new Set(['knowledge.search', 'knowledge.define', 'knowledge.weather', 'knowledge.currency']),
     fun: new Set(['fun.joke', 'fun.quote', 'fun.fact']),
     media: new Set(['media.play_music', 'media.list_music', 'media.pause', 'media.stop', 'media.resume']),
-    whatsapp: new Set(['whatsapp.connect', 'whatsapp.status', 'whatsapp.send', 'whatsapp.read', 'whatsapp.disconnect', 'whatsapp.contacts'])
+    whatsapp: new Set(['whatsapp.connect', 'whatsapp.status', 'whatsapp.send', 'whatsapp.read', 'whatsapp.disconnect', 'whatsapp.contacts']),
+    ui: new Set(['ui.focus.app', 'ui.keyboard.shortcut', 'ui.type.text', 'ui.key.press'])
 };
 
 const RUNTIME_LIMITS = {
@@ -91,7 +94,8 @@ const RUNTIME_LIMITS = {
     knowledge: { cpu: '1 core', memory: '128 MB', timeout: 10000 },
     fun: { timeout: 5000 },
     media: { timeout: 5000 },
-    whatsapp: { timeout: 15000 }
+    whatsapp: { timeout: 15000 },
+    ui: { timeout: 5000 }
 };
 
 const rolePermissions = {
@@ -103,7 +107,7 @@ const rolePermissions = {
         'shell.exec',
         'file.read',
         'computer.type',
-        'screen.capture',
+        'screen.screenshot',
         'device.restart_stack',
         'device.open_workspace',
         'device.run_tests',
@@ -135,7 +139,11 @@ const rolePermissions = {
         'whatsapp.send',
         'whatsapp.read',
         'whatsapp.disconnect',
-        'whatsapp.contacts'
+        'whatsapp.contacts',
+        'ui.focus.app',
+        'ui.keyboard.shortcut',
+        'ui.type.text',
+        'ui.key.press'
     ]),
 
     user: new Set([
@@ -167,7 +175,10 @@ const sensitiveActions = new Set([
     'file.write',
     'code.run',
     'communication.send_message',
-    'whatsapp.send'
+    'whatsapp.send',
+    'ui.keyboard.shortcut',
+    'ui.type.text',
+    'ui.key.press'
 ]);
 
 function withTimeout(promise, ms) {

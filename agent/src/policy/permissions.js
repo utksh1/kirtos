@@ -31,9 +31,12 @@ const Permissions = {
     // Code Categories
     'code.exec': { risk: 'critical', confirmation: true },
 
-    // Computer Categories
-    'computer.type': { risk: 'medium', confirmation: false },
-    'screen.capture': { risk: 'medium', confirmation: false }
+    // UI & Automation Categories (macOS Phase 1 MVP)
+    'ui.window.focus': { risk: 'medium', confirmation: false },
+    'ui.input.send': { risk: 'high', confirmation: true },
+
+    // Screen Capture Categories
+    'ui.screen.capture': { risk: 'medium', confirmation: true }
 };
 
 module.exports = { Permissions };

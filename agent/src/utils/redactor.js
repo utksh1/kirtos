@@ -40,6 +40,14 @@ class Redactor {
             if (redacted.command) redacted.command = this._redactCommand(redacted.command);
         }
 
+        // UI text input: NEVER log cleartext in normal/strict mode
+        if (intentName === 'ui.type.text') {
+            if (redacted.text) {
+                redacted.text = this._redactText(redacted.text);
+            }
+        }
+        // ui.keyboard.shortcut combo and ui.focus.app app name are safe to store as-is
+
         // Global fallback for anything that smells like a contact or URL
         Object.keys(redacted).forEach(key => {
             const val = redacted[key];
