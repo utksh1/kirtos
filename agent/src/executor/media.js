@@ -17,8 +17,62 @@ class MediaExecutor {
                 return await this._playMusic(params.query);
             case 'media.list_music':
                 return await this._listMusic();
+            case 'media.pause':
+                return await this._pause();
+            case 'media.stop':
+                return await this._stop();
+            case 'media.resume':
+                return await this._resume();
             default:
                 throw new Error(`MediaExecutor: Unsupported intent "${intent}"`);
+        }
+    }
+
+    /** Pause global media playback. */
+    async _pause() {
+        try {
+            await execPromise('osascript -e "tell application \\"System Events\\" to key code 103"');
+            return { status: 'success', message: 'Playback paused.' };
+        } catch (err) {
+            return { error: 'Failed to pause playback.' };
+        }
+    }
+
+    /** Resume global media playback. */
+    async _resume() {
+        try {
+            await execPromise('osascript -e "tell application \\"System Events\\" to key code 103"');
+            return { status: 'success', message: 'Playback resumed.' };
+        } catch (err) {
+            return { error: 'Failed to resume playback.' };
+        }
+    }
+
+    /** Stop playback - closes YouTube tabs and quits music apps. */
+    async _stop() {
+        const scripts = [
+            // Stop YouTube in Chrome
+            'tell application "Google Chrome" to close (tabs of windows whose title contains "YouTube")',
+            // Stop YouTube in Safari
+            'tell application "Safari" to close (tabs of windows whose title contains "YouTube")',
+            // Stop Music app
+            'if application "Music" is running then tell application "Music" to pause',
+            // Stop Spotify
+            'if application "Spotify" is running then tell application "Spotify" to pause',
+            // Quit generic players
+            'if application "VLC" is running then tell application "VLC" to quit'
+        ];
+
+        try {
+            for (const script of scripts) {
+                try { await execPromise(`osascript -e '${script}'`); } catch (e) { /* silent skip */ }
+            }
+            // Fallback: pause via system events
+            await execPromise('osascript -e "tell application \\"System Events\\" to key code 103"');
+
+            return { status: 'success', message: 'Attempted to stop all media playback.' };
+        } catch (err) {
+            return { error: 'Failed to stop playback fully.' };
         }
     }
 

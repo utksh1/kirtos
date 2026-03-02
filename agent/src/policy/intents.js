@@ -39,6 +39,12 @@ const Intents = {
         risk: 'high',
         runtime: 'system'
     },
+    'system.battery': {
+        schema: z.object({}),
+        permissions: ['system.read'],
+        risk: 'low',
+        runtime: 'system'
+    },
 
     // Query Intents
     'query.time': {
@@ -407,6 +413,58 @@ const Intents = {
         risk: 'low',
         runtime: 'fun'
     },
+    'fun.quote': {
+        schema: z.object({}),
+        permissions: ['system.read'],
+        risk: 'low',
+        runtime: 'fun'
+    },
+    'fun.fact': {
+        schema: z.object({}),
+        permissions: ['system.read'],
+        risk: 'low',
+        runtime: 'fun'
+    },
+
+    // Knowledge — Dictionary
+    'knowledge.define': {
+        schema: z.object({
+            word: z.string().min(1).describe('Word to look up in the dictionary')
+        }),
+        permissions: ['system.read'],
+        risk: 'low',
+        runtime: 'knowledge'
+    },
+    'knowledge.math': {
+        schema: z.object({
+            expression: z.string().min(1)
+        }),
+        permissions: ['system.read'],
+        risk: 'low',
+        runtime: 'knowledge'
+    },
+
+    // Knowledge — Weather
+    'knowledge.weather': {
+        schema: z.object({
+            city: z.string().min(1).describe('City name to get weather for')
+        }),
+        permissions: ['system.read'],
+        risk: 'low',
+        runtime: 'knowledge'
+    },
+
+    // Knowledge — Currency Conversion
+    'knowledge.currency': {
+        schema: z.object({
+            amount: z.coerce.number().min(0).describe('Amount to convert'),
+            from: z.string().min(3).max(3).describe('Source currency code, e.g. USD'),
+            to: z.string().min(3).max(3).describe('Target currency code, e.g. INR')
+        }),
+        permissions: ['system.read'],
+        risk: 'low',
+        runtime: 'knowledge'
+    },
 
     // Media Intents
     'media.play_music': {
@@ -420,6 +478,24 @@ const Intents = {
     'media.list_music': {
         schema: z.object({}),
         permissions: ['system.read'],
+        risk: 'low',
+        runtime: 'media'
+    },
+    'media.pause': {
+        schema: z.object({}),
+        permissions: ['system.write'],
+        risk: 'low',
+        runtime: 'media'
+    },
+    'media.stop': {
+        schema: z.object({}),
+        permissions: ['system.write'],
+        risk: 'low',
+        runtime: 'media'
+    },
+    'media.resume': {
+        schema: z.object({}),
+        permissions: ['system.write'],
         risk: 'low',
         runtime: 'media'
     },

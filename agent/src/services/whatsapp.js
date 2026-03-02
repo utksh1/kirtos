@@ -16,6 +16,7 @@ const path = require('path');
 const fs = require('fs');
 
 const AUTH_DIR = path.join(__dirname, '..', '..', '.whatsapp-auth');
+const CONTACTS_FILE = path.join(AUTH_DIR, 'contacts.json');
 
 class WhatsAppService {
     constructor() {
@@ -25,6 +26,7 @@ class WhatsAppService {
         this.messageStore = [];
         this.contacts = {};      // JID → display name cache
         this.MAX_STORE = 500;
+        this._loadContacts();
     }
 
     /** Format a JID into a clean phone number. */
@@ -35,12 +37,38 @@ class WhatsAppService {
 
     /** Get display name for a JID — prefers saved name, then pushName, then number. */
     _getDisplayName(jid, pushName) {
-        if (pushName) {
+        if (pushName && this.contacts[jid] !== pushName) {
             this.contacts[jid] = pushName;
+            this._saveContacts();
             return pushName;
         }
         if (this.contacts[jid]) return this.contacts[jid];
         return this._formatNumber(jid);
+    }
+
+    /** Load contacts from disk. */
+    _loadContacts() {
+        try {
+            if (fs.existsSync(CONTACTS_FILE)) {
+                const data = fs.readFileSync(CONTACTS_FILE, 'utf-8');
+                this.contacts = JSON.parse(data);
+                console.log(`[WhatsApp] Loaded ${Object.keys(this.contacts).length} contacts from disk.`);
+            }
+        } catch (err) {
+            console.error('[WhatsApp] Failed to load contacts:', err.message);
+        }
+    }
+
+    /** Save contacts to disk. */
+    _saveContacts() {
+        try {
+            if (!fs.existsSync(AUTH_DIR)) {
+                fs.mkdirSync(AUTH_DIR, { recursive: true });
+            }
+            fs.writeFileSync(CONTACTS_FILE, JSON.stringify(this.contacts, null, 2));
+        } catch (err) {
+            console.error('[WhatsApp] Failed to save contacts:', err.message);
+        }
     }
 
     /**
@@ -169,9 +197,14 @@ class WhatsAppService {
 
         // Cache contact names
         this.socket.ev.on('contacts.update', (contacts) => {
+            let changed = false;
             for (const c of contacts) {
-                if (c.id && c.notify) this.contacts[c.id] = c.notify;
+                if (c.id && c.notify && this.contacts[c.id] !== c.notify) {
+                    this.contacts[c.id] = c.notify;
+                    changed = true;
+                }
             }
+            if (changed) this._saveContacts();
         });
 
         // Listen for incoming messages (real-time)
@@ -292,7 +325,7 @@ class WhatsAppService {
         for (const [jid, name] of Object.entries(this.contacts)) {
             // Skip group JIDs and status broadcasts
             if (jid.includes('@g.us') || jid === 'status@broadcast') continue;
-            const number = this._formatJid(jid);
+            const number = this._formatNumber(jid);
             contacts.push({ name, number, jid });
         }
         // Sort alphabetically by name

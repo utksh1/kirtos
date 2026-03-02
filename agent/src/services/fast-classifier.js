@@ -1,23 +1,27 @@
 const CHAT_PATTERNS = [
     {
-        patterns: [/^(hi|hello|hey|howdy|yo|sup|hola|hii+)\b/i],
+        patterns: [/^(hi|hello|hey|howdy|yo|sup|hola|hi+|kirtos|hey\s+kirtos|hi\s+kirtos|yo\s+kirtos)\b(?:\s+there)?\s*[?.]*$/i],
         response: 'Hey there! How can I help you?'
     },
     {
-        patterns: [/^(good\s*(morning|afternoon|evening|night))/i],
+        patterns: [/^(good\s*morning|good\s*afternoon|good\s*evening|good\s*night)\b\s*[?.]*$/i],
         response: 'Good to see you! What can I do for you?'
     },
     {
-        patterns: [/^(thanks|thank\s*you|thx|cheers|appreciate\s*it)/i],
+        patterns: [/^(thanks|thank\s*you|thx|cheers|appreciate\s*its?)\b\s*[?.]*$/i],
         response: "You're welcome!"
     },
     {
-        patterns: [/^(bye|goodbye|see\s*you|later|cya|peace\s*out)/i],
+        patterns: [/^(bye|goodbye|see\s*you|later|cya|peace\s*out)\b\s*[?.]*$/i],
         response: 'See you later!'
     },
     {
-        patterns: [/^(how\s*are\s*you|what'?s\s*up|wassup)/i],
+        patterns: [/^(how\s*are\s*you|what'?s\s*up|wassup)\b\s*[?.]*$/i],
         response: "I'm running smoothly. What can I help you with?"
+    },
+    {
+        patterns: [/^j(?:ai|ay)\s*(?:shri|shree|sri)\s*ram/i, /^jai\s*(?:mata\s*di|ho)/i, /^har\s*har\s*mahadev/i, /^radhe\s*radhe/i, /^ram\s*ram/i, /^namaste/i, /^pranam/i],
+        response: '🙏 Jai Shree Ram! How can I help you today?'
     },
     {
         patterns: [/^(nice|cool|great|awesome|perfect|ok|okay|got\s*it|understood)/i],
@@ -50,9 +54,12 @@ const COMMAND_RULES = [
         category: 'volume',
         confidence: 0.90,
         patterns: [
-            /^(turn\s+(?:the\s+)?volume\s+(?:up|higher|louder))/i,
-            /^(increase\s+(?:the\s+)?volume)/i,
-            /^(volume\s+up)/i,
+            /^(?:turn\s+(?:the\s+)?(?:volume|sound)\s+(?:up|higher|louder))/i,
+            /^(?:turn\s+(?:up|higher|louder)\s+(?:the\s+)?(?:volume|sound))/i,
+            /^(?:increase\s+(?:the\s+)?(?:volume|sound))/i,
+            /^(?:volume|sound)\s+up/i,
+            /^(?:make\s+(?:it|the\s+sound|the\s+volume)\s+louder)/i,
+            /^(?:turn\s+(?:it|the\s+sound|the\s+volume)\s+up)/i,
         ],
         intent: 'system.volume.set',
         extract: () => ({ level: 70 }),
@@ -63,9 +70,12 @@ const COMMAND_RULES = [
         category: 'volume',
         confidence: 0.90,
         patterns: [
-            /^(turn\s+(?:the\s+)?volume\s+(?:down|lower|softer))/i,
-            /^(decrease\s+(?:the\s+)?volume)/i,
-            /^(volume\s+down)/i,
+            /^(?:turn\s+(?:the\s+)?(?:volume|sound)\s+(?:down|lower|softer))/i,
+            /^(?:turn\s+(?:down|lower|softer)\s+(?:the\s+)?(?:volume|sound))/i,
+            /^(?:decrease\s+(?:the\s+)?(?:volume|sound))/i,
+            /^(?:volume|sound)\s+down/i,
+            /^(?:make\s+(?:it|the\s+sound|the\s+volume)\s+softer)/i,
+            /^(?:turn\s+(?:it|the\s+sound|the\s+volume)\s+down)/i,
         ],
         intent: 'system.volume.set',
         extract: () => ({ level: 30 }),
@@ -121,9 +131,9 @@ const COMMAND_RULES = [
         category: 'brightness',
         confidence: 0.85,
         patterns: [
-            /^(make\s+(?:the\s+)?screen\s+(?:darker|dimmer|less\s+bright))/i,
-            /^(decrease\s+(?:the\s+)?brightness)/i,
-            /^(dimmer)/i,
+            /^(?:make\s+(?:the\s+)?screen\s+(?:darker|dimmer|less\s+bright))/i,
+            /^(?:decrease\s+(?:the\s+)?brightness)/i,
+            /^(?:dim|dimmer)(?:\s+the)?(?:\s+screen)?/i,
         ],
         intent: 'system.brightness.set',
         extract: () => ({ level: 0.3 }),
@@ -202,11 +212,82 @@ const COMMAND_RULES = [
         reasoning: (m) => `Opening ${m[1].trim()}.`,
         guard: (m) => {
             const target = m[1].trim().toLowerCase();
-            if (target.includes('http') || target.includes('www.') || target.includes('.com')) return false;
+            // Allow .com only if it clearly looks like an app name, otherwise let browser.open handle it
+            if (target.includes('.com') || target.includes('http')) return false;
             if (target.split(/\s+/).length > 3) return false;
             if (/youtube|and\s+/i.test(target)) return false;
             return true;
         }
+    },
+    // Browser Search
+    {
+        priority: 7,
+        category: 'browser',
+        confidence: 0.90,
+        patterns: [
+            /^(?:search\s+for\s+|search\s+|look\s+up\s+)(.+?)\s+(?:on|in|using)\s+(google|amazon|flipkart|youtube|github|wikipedia)/i,
+            /^(?:search\s+for\s+|search\s+|look\s+up\s+)(.+)/i
+        ],
+        intent: 'browser.search',
+        extract: (m) => ({
+            query: m[1].trim(),
+            engine: (m[2] ? m[2].toLowerCase() : 'google')
+        }),
+        reasoning: (m) => `Searching for "${m[1].trim()}" on ${m[2] || 'Google'}.`
+    },
+    // Browser Open (Move higher to catch .com etc)
+    {
+        priority: 6.5,
+        category: 'browser',
+        confidence: 0.90,
+        patterns: [
+            /^(?:open|go\s+to|visit|browse\s+to)\s+(https?:\/\/\S+|www\.\S+|localhost:\d+|\S+\.(?:com|org|net|io|in|me|gov|edu|app|sh|dev)\S*)/i,
+            /^(?:open|go\s+to|visit|browse\s+to)\s+(\S+\.(?:com|org|net|io|in|me|app|sh|dev))\b/i
+        ],
+        intent: 'browser.open',
+        extract: (m) => ({ url: m[1].startsWith('http') ? m[1] : `https://${m[1]}` }),
+        reasoning: (m) => `Opening ${m[1]} in your browser.`
+    },
+
+    // Media Controls (Highest priority for stopping/pausing to avoid accidental play)
+    {
+        priority: 11,
+        category: 'media',
+        confidence: 0.98,
+        patterns: [
+            /^(?:stop|kill|end|pause|hold|quit|close)(?:\s+(?:the|this|that))?\s+(?:music|song|video|playback|audio|it|that|youtube|spotify|browser|app|media|content)(?:\s+(?:in|on|at|from)\s+(?:youtube|spotify|browser|safari|chrome))?/i,
+            /^stop\s+that(?:\s+now)?$/i,
+            /^pause$/i,
+            /^stop$/i
+        ],
+        intent: 'media.stop',
+        extract: () => ({}),
+        reasoning: () => 'Stopping media playback.'
+    },
+    {
+        priority: 10,
+        category: 'media',
+        confidence: 0.95,
+        patterns: [
+            /^(?:resume|continue|unpause)(?:\s+(?:the|this|that))?\s+(?:music|song|video|playback|audio|it|that|youtube|spotify|content|media)(?:\s+(?:in|on|at|from)\s+(?:youtube|spotify|browser|safari|chrome))?/i,
+            /^(?:play|start)\s+(?:again|back)$/i,
+            /^resume$/i
+        ],
+        intent: 'media.resume',
+        extract: () => ({}),
+        reasoning: () => 'Resuming media playback.'
+    },
+    {
+        priority: 8,
+        category: 'media',
+        confidence: 0.90,
+        patterns: [
+            /^(?:what|which)\s+(?:song|music|track)\s+is\s+playing/i,
+            /^what's\s+playing/i
+        ],
+        intent: 'media.list_music', // Close enough for now
+        extract: () => ({}),
+        reasoning: () => 'Checking current music.'
     },
 
     // System queries
@@ -217,6 +298,8 @@ const COMMAND_RULES = [
         patterns: [
             /^(?:what(?:'s|\s+is)\s+the\s+)?(?:current\s+)?time/i,
             /^what\s+time\s+is\s+it/i,
+            /^(?:get|show|check)\s+(?:the\s+)?(?:clock|time)/i,
+            /^(?:the\s+)?time\s*[?.]*$/i,
         ],
         intent: 'query.time',
         extract: () => ({}),
@@ -278,6 +361,21 @@ const COMMAND_RULES = [
         extract: () => ({}),
         reasoning: () => 'Capturing the screen.'
     },
+
+    // Agent Identity
+    {
+        priority: 10,
+        category: 'system',
+        confidence: 0.99,
+        patterns: [
+            /^(?:who\s+are\s+you|what\s+is\s+your\s+name|your\s+name)(?:\s+please)?\??$/i,
+            /^who\s+is\s+this\??$/i
+        ],
+        intent: 'chat.message',
+        extract: () => ({ text: 'I am Kirtos, your AI agent.' }),
+        reasoning: () => 'Identifying myself.'
+    },
+
 
     // Typing
     {
@@ -365,6 +463,115 @@ const COMMAND_RULES = [
         reasoning: () => 'Here comes a joke!'
     },
 
+    // Quotes
+    {
+        priority: 9,
+        category: 'fun',
+        confidence: 0.95,
+        patterns: [
+            /^(?:give\s+me\s+)?(?:a\s+)?(?:random\s+)?quote/i,
+            /^(?:inspire|motivate)\s+me/i,
+            /^(?:say\s+)?(?:something\s+)?(?:inspirational|motivational)/i,
+        ],
+        intent: 'fun.quote',
+        extract: () => ({}),
+        reasoning: () => 'Here\'s a quote for you!'
+    },
+
+    // Fun Facts
+    {
+        priority: 9,
+        category: 'fun',
+        confidence: 0.95,
+        patterns: [
+            /^(?:tell\s+me\s+)?(?:a\s+)?(?:random\s+|fun\s+|interesting\s+)?fact/i,
+            /^(?:random|fun|interesting)\s+fact/i,
+            /^did\s+you\s+know/i,
+        ],
+        intent: 'fun.fact',
+        extract: () => ({}),
+        reasoning: () => 'Here\'s a fun fact!'
+    },
+
+    // Weather
+    {
+        priority: 9,
+        category: 'weather',
+        confidence: 0.95,
+        patterns: [
+            /^(?:what(?:'s|\s+is)\s+the\s+)?weather\s+(?:in\s+|for\s+|at\s+)?(.+)/i,
+            /^(?:how(?:'s|\s+is)\s+the\s+)?weather\s+(?:in\s+|at\s+)?(.+)/i,
+            /^(?:what(?:'s|\s+is)\s+the\s+)?temperature\s+(?:in\s+|at\s+)?(.+)/i,
+            /^(?:how\s+(?:hot|cold)\s+is\s+it\s+in\s+)(.+)/i,
+            /^(?:is\s+it\s+raining\s+in\s+)(.+)/i,
+        ],
+        intent: 'knowledge.weather',
+        extract: (m) => ({ city: m[1].trim().replace(/[?.]$/, '') }),
+        reasoning: (m) => `Checking weather for ${m[1].trim()}.`
+    },
+    {
+        priority: 8,
+        category: 'weather',
+        confidence: 0.85,
+        patterns: [
+            /^(?:what(?:'s|\s+is)\s+the\s+)?weather$/i,
+            /^(?:how(?:'s|\s+is)\s+the\s+)?weather$/i,
+        ],
+        intent: 'knowledge.weather',
+        extract: () => ({ city: 'Delhi' }),
+        reasoning: () => 'Checking weather for Delhi.'
+    },
+
+    // Dictionary
+    {
+        priority: 10,
+        category: 'dictionary',
+        confidence: 0.95,
+        patterns: [
+            /^define\s+(.+)/i,
+            /^(?:what\s+does\s+)(.+?)(?:\s+mean)\??$/i,
+            /^(?:what\s+is\s+the\s+)?meaning\s+of\s+(.+)/i,
+            /^(?:what\s+is\s+the\s+)?definition\s+of\s+(.+)/i,
+            /^(?:tell\s+me\s+about|explain|describe|lookup)\s+(.+)/i,
+
+        ],
+        intent: 'knowledge.define',
+        extract: (m) => ({ word: (m[2] || m[1]).trim().replace(/[?.]$/, '') }),
+        reasoning: (m) => `Looking up the definition of "${(m[2] || m[1]).trim()}".`,
+        guard: (m) => (m[2] || m[1]).trim().split(/\s+/).length <= 4
+    },
+
+    // Currency Conversion
+    {
+        priority: 9,
+        category: 'currency',
+        confidence: 0.95,
+        patterns: [
+            /^convert\s+(\d+(?:\.\d+)?)\s+([a-z]{3})\s+(?:to|in(?:to)?)\s+([a-z]{3})/i,
+            /^(\d+(?:\.\d+)?)\s+([a-z]{3})\s+(?:to|in)\s+([a-z]{3})/i,
+        ],
+        intent: 'knowledge.currency',
+        extract: (m) => ({ amount: parseFloat(m[1]), from: m[2].toUpperCase(), to: m[3].toUpperCase() }),
+        reasoning: (m) => `Converting ${m[1]} ${m[2].toUpperCase()} to ${m[3].toUpperCase()}.`
+    },
+    {
+        priority: 8,
+        category: 'currency',
+        confidence: 0.90,
+        patterns: [
+            /^(\d+(?:\.\d+)?)\s+(?:dollars?|usd)\s+(?:to|in)\s+(?:rupees?|inr)/i,
+            /^(\d+(?:\.\d+)?)\s+(?:rupees?|inr)\s+(?:to|in)\s+(?:dollars?|usd)/i,
+        ],
+        intent: 'knowledge.currency',
+        extract: (m) => {
+            const amt = parseFloat(m[1]);
+            const text = m[0].toLowerCase();
+            if (/dollars?|usd/.test(text.split(/to|in/)[0])) return { amount: amt, from: 'USD', to: 'INR' };
+            return { amount: amt, from: 'INR', to: 'USD' };
+        },
+        reasoning: (m) => `Converting ${m[1]} currency.`
+    },
+
     // Greeting
     {
         priority: 8,
@@ -372,7 +579,6 @@ const COMMAND_RULES = [
         confidence: 0.90,
         patterns: [
             /^greet\s*(?:me)?$/i,
-            /^(?:say\s+)?(?:good\s*)?(?:morning|afternoon|evening|night)$/i,
         ],
         intent: 'query.greet',
         extract: () => ({}),
@@ -432,7 +638,9 @@ const COMMAND_RULES = [
             /^(?:send|write)\s+(?:a\s+)?(?:m[ae]ss?age?|msg)\s+(?:to\s+)?(\w[\w\s]*?)\s+(?:on\s+)?(?:whatsapp|wa)\s+(?:that\s+|saying\s+)?(.+)/i,
             /^(?:send|write)\s+(?:a\s+)?(?:whatsapp|wa)\s+(?:m[ae]ss?age?|msg)\s+(?:to\s+)?(\w[\w\s]*?)\s+(?:that\s+|saying\s+)?(.+)/i,
             /^(?:send|write)\s+(?:a\s+)?(?:to\s+)?(\w[\w\s]*?)\s+(?:on\s+)?(?:whatsapp|wa)\s+(?:that\s+|saying\s+)?(.+)/i,
-            /^(?:whatsapp|wa)\s+(\w[\w\s]*?)\s+(?:that\s+|saying\s+)?(.+)/i,
+            /^(?:send|write)\s+(?:a\s+)?(?:whatsapp|wa)\s+(?:to\s+)?(\w[\w\s]*?)\s+(.+)/i,
+            /^(?:whatsapp|wa|message|msg)\s+(?:to\s+)?(\w[\w\s]*?)\s+(?:that\s+|saying\s+)?(.+)/i,
+
         ],
         intent: 'whatsapp.send',
         extract: (m) => ({
@@ -484,6 +692,18 @@ const COMMAND_RULES = [
         extract: () => ({}),
         reasoning: () => 'Disconnecting from WhatsApp.'
     },
+    {
+        priority: 9,
+        category: 'whatsapp',
+        confidence: 0.90,
+        patterns: [
+            /^(?:list|show|get|read)\s+(?:all\s+)?(?:the\s+)?(?:my\s+)?(?:whatsapp|wa)\s+contacts?/i,
+            /^(?:list|show|get|read)\s+(?:all\s+)?(?:the\s+)?(?:my\s+)?contacts?\s+(?:from|of|on|in)\s+(?:whatsapp|wa)/i,
+        ],
+        intent: 'whatsapp.contacts',
+        extract: () => ({}),
+        reasoning: () => 'Listing your WhatsApp contacts.'
+    },
 
     // Help
     {
@@ -494,6 +714,50 @@ const COMMAND_RULES = [
         intent: 'query.help',
         extract: () => ({}),
         reasoning: () => "Here's what I can help you with."
+    },
+
+    // Math (added to match stress test)
+    {
+        priority: 9,
+        category: 'knowledge',
+        confidence: 0.95,
+        patterns: [
+            /^(?:calculate|solve|what\s+is|how\s+much\s+is)\s+([\d\s\+\-\*\/\(\)\^\.x]+)(?:\s+=\s*)?$/i,
+            /^([\d\s\+\-\*\/\(\)\^\.x]+)\s+=\s*$/i
+        ],
+        intent: 'knowledge.math',
+        extract: (m) => ({ expression: m[1].trim() }),
+        reasoning: (m) => `Calculating ${m[1].trim()}.`
+    },
+
+    // Battery (added to match stress test)
+    {
+        priority: 10,
+        category: 'system',
+        confidence: 0.95,
+        patterns: [
+            /^(?:what\s+is\s+the\s+)?battery\s+(?:level|status|percentage)/i,
+            /^check\s+battery/i,
+            /^how\s+much\s+battery(?:\s+is\s+left)?/i
+        ],
+        intent: 'system.battery',
+        extract: () => ({}),
+        reasoning: () => 'Checking battery status.'
+    },
+
+    // Time (alias for query.time to match stress test)
+    {
+        priority: 10,
+        category: 'system',
+        confidence: 0.95,
+        patterns: [
+            /^(?:what\s+is\s+the\s+)?time$/i,
+            /^current\s+time$/i,
+            /^time\s+now$/i
+        ],
+        intent: 'query.time',
+        extract: () => ({}),
+        reasoning: () => 'Checking the time.'
     },
 ];
 
@@ -507,37 +771,26 @@ function fastClassify(text) {
     const trimmed = text.trim();
     if (!trimmed) return null;
 
-    // Check chat patterns first
-    for (const chatRule of CHAT_PATTERNS) {
-        for (const pattern of chatRule.patterns) {
-            if (pattern.test(trimmed)) {
-                return {
-                    intent: 'chat.message',
-                    action: 'chat.message',
-                    params: { text: trimmed },
-                    category: 'chat',
-                    confidence: 0.95,
-                    reasoning: chatRule.response,
-                    source: 'fast'
-                };
-            }
-        }
-    }
+    // List of conversational prefixes and suffixes to strip
+    const PREFIXES = /^(?:hey|hi|yo|hello|kirtos|agent|kirtos\s+agent|can\s+you|could\s+you|would\s+you|will\s+you|please|quickly|just|i\s+want\s+to|i\s+need\s+to|somebody|someone)\s+/i;
+    const SUFFIXES = /\s*(?:please|for\s+me|asap|at\s+once|immediately|right\s+now|quickly|thanks|if\s+you\s+can|right\s+away|now)\s*[?.]*$/i;
 
-    // Strip conversational prefixes so "can you read whatsapp messages"
-    // becomes "read whatsapp messages" for pattern matching
-    const stripped = trimmed
-        .replace(/^(?:can\s+you|could\s+you|would\s+you|will\s+you|please)\s+/i, '')
-        .replace(/\s*(?:please|for\s+me)\s*[?.]?\s*$/i, '')
-        // Normalize common WhatsApp misspellings
-        .replace(/\bwh?ats?a?pp?\b/gi, 'whatsapp')
-        .trim();
+    let stripped = trimmed;
+    let lastStripped;
+    do {
+        lastStripped = stripped;
+        stripped = stripped.replace(PREFIXES, '').replace(SUFFIXES, '').trim();
+    } while (stripped !== lastStripped && stripped.length > 0);
+
+    // Normalize common WhatsApp misspellings
+    stripped = stripped.replace(/\bwh?ats?a?pp?\b/gi, 'whatsapp');
+
 
     // Try matching with both original and stripped versions
     const candidates = [trimmed];
-    if (stripped !== trimmed) candidates.push(stripped);
+    if (stripped && stripped !== trimmed) candidates.push(stripped);
 
-    // Check command rules (highest priority first)
+    // Check command rules first (highest priority first)
     for (const rule of COMMAND_RULES) {
         for (const candidate of candidates) {
             for (const pattern of rule.patterns) {
@@ -555,6 +808,23 @@ function fastClassify(text) {
                         source: 'fast'
                     };
                 }
+            }
+        }
+    }
+
+    // Check chat patterns last
+    for (const chatRule of CHAT_PATTERNS) {
+        for (const pattern of chatRule.patterns) {
+            if (pattern.test(trimmed)) {
+                return {
+                    intent: 'chat.message',
+                    action: 'chat.message',
+                    params: { text: trimmed },
+                    category: 'chat',
+                    confidence: 0.95,
+                    reasoning: chatRule.response,
+                    source: 'fast'
+                };
             }
         }
     }

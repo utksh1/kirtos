@@ -1,5 +1,5 @@
 const OpenAI = require('openai');
-const { Intents } = require('../policy/intents');
+const IntentRegistry = require('../policy/registry');
 const { fastClassify } = require('./fast-classifier');
 const fs = require('fs');
 require('dotenv').config({ override: true });
@@ -40,43 +40,54 @@ class IntelligenceService {
         this.model = rawModel.trim();
     }
 
-    async parseIntent(text, history = []) {
+    async parseIntent(text, history = [], currentState = {}) {
         // 1. Try regex-based fast classifier first (~1ms)
         const fastResult = fastClassify(text);
         if (fastResult) {
             console.log(`[Fast] "${text}" → ${fastResult.intent}`);
-            return fastResult;
+            return {
+                plan: [fastResult],
+                reasoning: `Okay, let's do that.`,
+                source: 'fast-classifier'
+            };
         }
 
         // 2. Try local NLP classifier (~5ms, offline)
-        const nlpResult = await this._nlpClassify(text);
-        if (nlpResult && nlpResult.confidence > 0.03) {
+        const nlpResult = await this._nlpClassify(text, history);
+        if (nlpResult && nlpResult.confidence > 0.6) {
             console.log(`[NLP] "${text}" → ${nlpResult.intent} (${(nlpResult.confidence * 100).toFixed(0)}%)`);
+            let params = this._extractParamsFromText(text, nlpResult.intent);
+
             return {
-                intent: nlpResult.intent,
-                params: this._extractParamsFromText(text, nlpResult.intent),
-                confidence: nlpResult.confidence,
-                reasoning: `NLP classified as ${nlpResult.intent}`,
-                source: 'nlp'
+                plan: [{
+                    intent: nlpResult.intent,
+                    params,
+                    confidence: nlpResult.confidence
+                }],
+                reasoning: `I've understood your request.`,
+                source: 'local-nlp'
             };
         }
 
-        if (!this.client) {
+        if (!this.client && !this.doClient) {
             return {
-                intent: 'query.help',
-                params: {},
-                confidence: 0.1,
-                error: 'Intelligence service not configured'
+                plan: [{
+                    intent: 'query.help',
+                    params: {},
+                    confidence: 0.1,
+                }],
+                reasoning: 'Intelligence service not configured. Please check your API keys.'
             };
         }
 
-        const availableIntents = Object.keys(Intents).map(name => {
-            const def = Intents[name];
+        const allIntents = IntentRegistry.getAll();
+        const availableIntents = Object.keys(allIntents).map(name => {
+            const def = allIntents[name];
             const params = {};
             if (def.schema && def.schema.shape) {
                 Object.keys(def.schema.shape).forEach(key => {
                     const field = def.schema.shape[key];
-                    params[key] = field.description || 'string/number';
+                    params[key] = (field.description || 'string/number') + (field._def?.defaultValue !== undefined ? ` (default: ${field._def.defaultValue})` : '');
                 });
             }
             return { name, description: name.split('.').join(' '), parameters: params };
@@ -84,57 +95,36 @@ class IntelligenceService {
 
         const systemPrompt = `
 You are the Intent Parser for Kirtos, a macOS local-first agent.
-Your job is to translate human natural language into a single structured JSON intent.
+Your job is to translate human natural language into a list of structured JSON intents (The "Plan").
 
 AVAILABLE INTENTS:
 ${JSON.stringify(availableIntents, null, 2)}
 
+CURRENT SESSION STATE (DETERMINISTIC ENTITIES):
+${JSON.stringify(currentState, null, 2)}
+
 CONTEXT AWARENESS:
 - You have access to the conversation history.
-- Use history to resolve pronouns like "it", "them", "that".
+- Use history and the "CURRENT SESSION STATE" to resolve pronouns like "it", "them", "that", "him", "her".
+- **Rule**: If a pronoun like "him" is used, preference MUST be given to the "last_contact" in the current state.
+- **Rule**: If "it" refers to an app, use "last_app" from the current state.
 
-RULES:
-1. ONLY respond with valid JSON.
-2. Select the MOST LIKELY intent.
-3. If no intent fits well, return intent "query.help".
-4. If a request is ambiguous, lacks details, or is incomplete (e.g., "play something", "open it"), use "chat.message" and use the "reasoning" field to ask the user for clarification.
-5. If it's a social greeting or small talk, use "chat.message".
-6. Assign a confidence score between 0.0 and 1.0.
+STRATEGY:
+- If the user asks for multiple things ("Set volume to 50 and then open Safari"), return a LIST of intents in order.
+- If the user is just chatting, use "chat.message".
+- Always provide a "reasoning" field as your ACTUAL RESPONSE to the user for the whole plan.
 
 OUTPUT FORMAT (JSON ONLY):
 {
-  "intent": "string",
-  "params": {},
-  "confidence": 0.95,
-  "reasoning": "A short, natural response to speak to the user (e.g. 'Setting a timer for 5 minutes')"
+  "plan": [
+    {
+      "intent": "string",
+      "params": {},
+      "confidence": 0.95
+    }
+  ],
+  "reasoning": "Your direct, friendly response to the user"
 }
-
-STRATEGY:
-- "set a timer for 5 minutes" -> intent: "clock.timer.start", params: { "duration_seconds": 300, "label": "Timer" }
-- "remind me to check the oven at 6pm" -> intent: "clock.alarm.set", params: { "time": "18:00", "label": "Check the oven" }
-- "turn up the volume" -> intent: "system.volume.set", params: { "level": 70 }
-- "mute the sound" -> intent: "system.volume.mute", params: { "enabled": true }
-- "make the screen brighter" -> intent: "system.brightness.set", params: { "level": 0.8 }
-- "What is on my screen" -> intent: "screen.capture"
-- "Type hello" -> intent: "computer.type", params: { "text": "hello" }
-- "Open terminal" -> intent: "system.app.open", params: { "app": "Terminal" }
-- "enable do not disturb" -> intent: "system.focus.set", params: { "mode": "Do Not Disturb", "enabled": true }
-- "play shape of you on youtube" -> intent: "browser.play_youtube", params: { "query": "shape of you" }
-- "play some lofi music" -> intent: "browser.play_youtube", params: { "query": "lofi music" }
-- "search for mechanical keyboards on amazon" -> intent: "browser.search", params: { "query": "mechanical keyboards", "engine": "amazon" }
-- "look up the meaning of kirtos on google" -> intent: "browser.search", params: { "query": "meaning of kirtos", "engine": "google" }
-- "open flipkart and play something" -> intent: "browser.search", params: { "query": "random", "engine": "flipkart" }
-- "open Amazon and open on the 200 day" -> intent: "browser.search", params: { "query": "200 day", "engine": "amazon" }
-- "what is JavaScript" -> intent: "knowledge.search", params: { "query": "JavaScript" }
-- "tell me about Python" -> intent: "knowledge.search", params: { "query": "Python" }
-- "tell me a joke" -> intent: "fun.joke", params: { "category": "Programming" }
-- "play music" -> intent: "media.play_music", params: { "query": "" }
-- "connect whatsapp" -> intent: "whatsapp.connect", params: {}
-- "send whatsapp to 919876543210 hello" -> intent: "whatsapp.send", params: { "number": "919876543210", "message": "hello" }
-- "send message to Utkarsh on whatsapp hi there" -> intent: "whatsapp.send", params: { "number": "Utkarsh", "message": "hi there" }
-- "read whatsapp messages" -> intent: "whatsapp.read", params: { "limit": 10 }
-- "can you read my whatsapp messages" -> intent: "whatsapp.read", params: { "limit": 10 }
-- "whatsapp status" -> intent: "whatsapp.status", params: {}
 `;
 
         const messages = [
@@ -157,51 +147,115 @@ STRATEGY:
             const { content } = response.choices[0].message;
             const jsonMatch = content.match(/\{[\s\S]*\}/);
             const result = jsonMatch ? JSON.parse(jsonMatch[0]) : JSON.parse(content);
+
+            if (!result.plan) {
+                result.plan = [{
+                    intent: result.intent,
+                    params: result.params,
+                    confidence: result.confidence
+                }];
+            }
+
             result.source = 'llm';
+
+            result.plan.forEach(step => {
+                if (step.params) {
+                    Object.keys(step.params).forEach(key => {
+                        const val = step.params[key];
+                        if (val && typeof val === 'object' && !Array.isArray(val)) {
+                            step.params[key] = val[key] || val.text || val.content || val.value || JSON.stringify(val);
+                        }
+                    });
+                }
+            });
+
+            console.log(`[Intelligence] Plan Generated:`, JSON.stringify(result, null, 2));
             return result;
 
         } catch (err) {
             console.error('IntelligenceService Error:', err);
             return {
-                intent: 'chat.message',
-                params: {},
-                confidence: 0,
+                plan: [{
+                    intent: 'chat.message',
+                    params: {},
+                    confidence: 0,
+                }],
                 reasoning: `I'm having trouble retrieving that. (Error: ${err.message})`
             };
         }
     }
 
-    /**
-     * Call the local Python NLP classifier server.
-     * Returns null if the server is unreachable.
-     */
-    async _nlpClassify(text) {
+    async askKnowledge(query) {
+        if (!this.client && !this.doClient) return "I'm sorry, my knowledge base is currently offline.";
+
+        console.log(`[Intelligence] Querying central LLM for knowledge: "${query}"`);
+        const systemPrompt = "You are a highly intelligent knowledge assistant. Provide a clear, accurate, and concise summary (3-4 sentences) about the topic provided. Be factual and helpful.";
+
+        try {
+            const messages = [
+                { role: 'system', content: systemPrompt },
+                { role: 'user', content: query }
+            ];
+
+            let response;
+            if (this.doClient) {
+                response = await this.doClient.chat.completions.create({
+                    model: 'default',
+                    messages,
+                    temperature: 0.3
+                });
+            } else {
+                response = await this.client.chat.completions.create({
+                    model: this.model,
+                    messages,
+                    temperature: 0.3
+                });
+            }
+
+            return response.choices[0].message.content.trim();
+        } catch (err) {
+            console.error('askKnowledge Error:', err);
+            throw err;
+        }
+    }
+
+    async _nlpClassify(text, history = []) {
         try {
             const controller = new AbortController();
-            const timeout = setTimeout(() => controller.abort(), 500); // 500ms max
+            const timeout = setTimeout(() => controller.abort(), 5000); // 5s max
             const resp = await fetch('http://127.0.0.1:5050/classify', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ text }),
+                body: JSON.stringify({
+                    text,
+                    history: history.slice(-2)
+                }),
                 signal: controller.signal
             });
             clearTimeout(timeout);
             if (!resp.ok) return null;
             return await resp.json();
-        } catch {
-            return null; // Server not running — silently fall through to LLM
+        } catch (err) {
+            return null;
         }
     }
 
-    /**
-     * Extract basic params from text based on the predicted intent.
-     * The NLP model only predicts intent, not params — this fills them in.
-     */
+    async submitCorrection(text, intent) {
+        try {
+            await fetch('http://127.0.0.1:5050/add_correction', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ text, intent })
+            });
+        } catch (err) {
+            console.error('Correction submission failed:', err);
+        }
+    }
+
     _extractParamsFromText(text, intent) {
         const lower = text.toLowerCase().trim();
 
         if (intent === 'whatsapp.send') {
-            // Try to extract "to <name> ... <message>"
             const m = lower.match(/(?:to\s+)?([\w\s]+?)\s+(?:on\s+)?(?:whatsapp|wa|whatapp|watsapp)\s+(?:that\s+|saying\s+)?(.+)/i);
             if (m) return { number: m[1].trim(), message: m[2].trim() };
             return { number: '', message: text };
@@ -259,6 +313,22 @@ STRATEGY:
             return { command: cmd };
         }
 
+        if (intent === 'knowledge.define') {
+            const word = lower.replace(/^(?:define|meaning\s+of|definition\s+of)\s+/i, '').replace(/[?.]/g, '').trim();
+            return { word: word || text };
+        }
+
+        if (intent === 'knowledge.weather') {
+            const city = lower.replace(/^(?:weather|what(?:'s|\s+is)\s+the\s+weather)\s+(?:in|for|at)?\s*/i, '').replace(/[?.]/g, '').trim();
+            return { city: city || 'Mumbai' };
+        }
+
+        if (intent === 'knowledge.currency') {
+            const m = lower.match(/(\d+(?:\.\d+)?)\s*([a-z]{3})\s+(?:to|in)\s+([a-z]{3})/i);
+            if (m) return { amount: parseFloat(m[1]), from: m[2].toUpperCase(), to: m[3].toUpperCase() };
+            return { amount: 1, from: 'USD', to: 'INR' };
+        }
+
         return {};
     }
 
@@ -269,10 +339,17 @@ STRATEGY:
 
         const fallbackMessage = result.message || (result.error ? `Error: ${result.error}` : 'Command executed.');
 
-        // For chat messages, the actual reply is in params.text (from LLM),
-        // reasoning is just meta-info like "Answering a question"
-        if (intent === 'chat.message') return params?.text || reasoning || result.message || "Hi there!";
-        if (!this.client) return fallbackMessage;
+        if (intent === 'chat.message') {
+            const reply = reasoning || params?.text || result.message || "I'm here to help!";
+            if (reply.toLowerCase().trim() === originalText.toLowerCase().trim()) {
+                const lower = originalText.toLowerCase();
+                if (lower.includes('who are you') || lower.includes('what are you')) return "I am Kirtos, your AI assistant.";
+                if (lower.includes('hi') || lower.includes('hello')) return "Hello! How can I assist you today?";
+                return "I'm not sure how to respond to that, but I'm here if you need anything else.";
+            }
+            return reply;
+        }
+        if (!this.client && !this.doClient) return fallbackMessage;
 
         const systemPrompt = `
 You are Kirtos, a voice assistant. Summarize what just happened in ONE short sentence.
@@ -282,13 +359,12 @@ INPUT:
 - Result: ${JSON.stringify(result)}
 
 STRICT RULES:
-1. MAX 15 words. Be concise and conversational, like a friend talking.
-2. NEVER include URLs, file paths, port numbers, or technical IDs.
-3. NEVER say "successfully" or "in your default browser" — be casual.
-4. Good examples: "YouTube is open", "Volume set to 50%", "Message sent to Utkarsh", "Here are your messages"
-5. Bad examples: "YouTube was opened successfully in your default browser, loading https://..." — TOO LONG.
-6. If error, say what went wrong briefly: "Couldn't connect to WhatsApp, try again"
-7. Reply with ONLY the summary sentence, nothing else.
+1. MAX 20 words. Be concise and conversational.
+2. NEVER include URLs, file paths, or technical IDs.
+3. NEVER say "successfully" — be natural.
+4. IF THERE IS AN ERROR: Explain it clearly and ASK A QUESTION to help the user fix it.
+5. If it worked, just confirm the action: "Message sent to Mom."
+6. Reply with ONLY the summary sentence/question, nothing else.
 `;
         try {
             const messages = [
@@ -298,15 +374,9 @@ STRICT RULES:
 
             let response;
             if (this.doClient) {
-                response = await this.doClient.chat.completions.create({
-                    model: 'default',
-                    messages
-                });
+                response = await this.doClient.chat.completions.create({ model: 'default', messages });
             } else if (this.client) {
-                response = await this.client.chat.completions.create({
-                    model: this.model,
-                    messages
-                });
+                response = await this.client.chat.completions.create({ model: this.model, messages });
             }
             return response.choices[0].message.content;
         } catch (err) {

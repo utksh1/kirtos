@@ -15,6 +15,7 @@
     "@deepgram/sdk": "^4.11.3",
     "@fastify/cors": "^11.2.0",
     "@fastify/websocket": "^11.0.1",
+    "@supabase/supabase-js": "^2.97.0",
     "@whiskeysockets/baileys": "^7.0.0-rc.9",
     "bytez.js": "^3.0.0",
     "dotenv": "^17.2.3",

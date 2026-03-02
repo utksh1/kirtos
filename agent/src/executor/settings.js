@@ -49,7 +49,13 @@ class SettingsExecutor {
         const normalized = Math.max(0, Math.min(1, level));
         try {
             // Priority: brightness CLI tool
-            await execPromise(`brightness ${normalized}`);
+            const { stdout, stderr } = await execPromise(`brightness ${normalized}`);
+
+            // The 'brightness' tool often returns exit code 0 even if it fails with an error message
+            if (stdout.includes('failed') || stderr.includes('failed')) {
+                throw new Error(stdout || stderr);
+            }
+
             return {
                 status: 'success',
                 summary: `Brightness set to ${Math.round(normalized * 100)}%`,
@@ -57,17 +63,37 @@ class SettingsExecutor {
             };
         } catch (e) {
             // Fallback: AppleScript (System Events)
-            // Note: This often requires Accessibility permissions
-            const script = `tell application "System Events" to repeat ${Math.round(normalized * 16)} times \n key code 144 \n end repeat`;
-            // That's a bit crude. Better way is to use specific brightness keys but they vary.
-            // Let's use a simpler AppleScript for "Display Brightness" if possible.
-            // Actually, for a senior implementation, we'd prefer stable CLI.
-            // Since brightness tool is missing, we'll report the fallback attempt.
-            return {
-                status: 'error',
-                summary: 'Brightness tool not installed.',
-                details: 'Please install via: brew install brightness'
-            };
+            // This method is a bit slow but works on most Macs if Accessibility is granted.
+            // It resets to 0 and then steps up to the desired level.
+            try {
+                const steps = Math.round(normalized * 16);
+                const script = `
+                    tell application "System Events"
+                        -- Reset to 0 (Brightness Down)
+                        repeat 16 times
+                            key code 145
+                        end repeat
+                        -- Set to level (Brightness Up)
+                        repeat ${steps} times
+                            key code 144
+                        end repeat
+                    end tell
+                `;
+                await execPromise(`osascript -e '${script}'`);
+
+                return {
+                    status: 'success',
+                    summary: `Brightness adjusted to ~${Math.round(normalized * 100)}% via System Events.`,
+                    details: { level: normalized, method: 'applescript' }
+                };
+            } catch (innerErr) {
+                return {
+                    status: 'error',
+                    summary: 'Failed to adjust brightness.',
+                    details: 'The brightness tool failed, and AppleScript fallback also failed. Ensure Terminal has Accessibility permissions in System Settings > Privacy & Security.',
+                    hint: 'If you have an M1/M2/M3 Mac, you might need a tool like "m-cli" or "BetterDisplay" CLI for better results.'
+                };
+            }
         }
     }
 

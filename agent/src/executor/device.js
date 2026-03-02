@@ -164,20 +164,35 @@ class DeviceExecutor {
     }
 
     async _setBrightness({ level }) {
+        const normalized = Math.max(0, Math.min(100, level)) / 100;
         try {
-            await execPromise(`brightness ${level / 100}`);
+            const { stdout, stderr } = await execPromise(`brightness ${normalized}`);
+            if (stdout.includes('failed') || stderr.includes('failed')) {
+                throw new Error(stdout || stderr);
+            }
             return { message: `Brightness set to ${level}%` };
         } catch (e) {
             try {
-                // Fallback: send key codes
-                const direction = level > 50 ? 144 : 145;
-                await execPromise(`osascript -e 'tell application "System Events" to key code ${direction}'`);
-                return { message: "Adjusted brightness via system key codes." };
+                // Fallback: AppleScript (System Events)
+                // This method is a bit slow but works on most Macs if Accessibility is granted.
+                const steps = Math.round(normalized * 16);
+                const script = `
+                    tell application "System Events"
+                        repeat 16 times
+                            key code 145
+                        end repeat
+                        repeat ${steps} times
+                            key code 144
+                        end repeat
+                    end tell
+                `;
+                await execPromise(`osascript -e '${script}'`);
+                return { message: `Brightness adjusted to ~${level}% via system keys.` };
             } catch (innerErr) {
                 return {
                     message: "Failed to adjust brightness.",
                     error: innerErr.message,
-                    hint: "macOS may require Accessibility permissions for terminal/osascript."
+                    hint: "macOS may require Accessibility permissions for Terminal/System Events. If on an M1/M2 Mac, 'brightness' CLI tool might not be fully compatible."
                 };
             }
         }

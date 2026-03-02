@@ -3,7 +3,11 @@ import {
     Mic,
     ArrowUp,
     MessageSquare,
-    Zap
+    Zap,
+    History,
+    Plus,
+    X,
+    Clock
 } from 'lucide-react'
 import './App.css'
 
@@ -20,11 +24,28 @@ function App() {
         { role: 'agent', text: 'Kirtos system online. How can I assist you today?', time: new Date().toLocaleTimeString() }
     ])
     const [status, setStatus] = useState('CONNECTING...')
+    const [isLoadingHistory, setIsLoadingHistory] = useState(true)
+    const [showSessions, setShowSessions] = useState(false)
+    const [sessions, setSessions] = useState<{ id: string, lastActivity: string }[]>([])
 
     const socketRef = useRef<WebSocket | null>(null)
     const chatEndRef = useRef<HTMLDivElement | null>(null)
     const recognitionRef = useRef<any>(null)
-    const sessionId = useRef(`session-${Math.random().toString(36).substr(2, 9)}`)
+
+    // Persist Session ID across refreshes
+    const [currentSessionId, setCurrentSessionId] = useState(() => {
+        const saved = localStorage.getItem('kirtos_session_id')
+        if (saved) return saved
+        const newId = `session-${Math.random().toString(36).substr(2, 9)}`
+        localStorage.setItem('kirtos_session_id', newId)
+        return newId
+    })
+
+    const sessionIdRef = useRef(currentSessionId)
+    useEffect(() => {
+        sessionIdRef.current = currentSessionId
+        localStorage.setItem('kirtos_session_id', currentSessionId)
+    }, [currentSessionId])
 
     const scrollToBottom = () => {
         chatEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -33,6 +54,59 @@ function App() {
     useEffect(() => {
         scrollToBottom()
     }, [messages])
+
+    // Fetch History on Mount / Session Change
+    useEffect(() => {
+        const fetchHistory = async () => {
+            try {
+                setIsLoadingHistory(true)
+                const resp = await fetch(`http://localhost:3001/history/${currentSessionId}`)
+                const data = await resp.json()
+
+                if (data.status === 'success') {
+                    if (data.history.length > 0) {
+                        const mappedHistory = data.history.map((h: any) => ({
+                            role: h.role === 'assistant' ? 'agent' : 'user',
+                            text: h.content,
+                            time: new Date(h.timestamp).toLocaleTimeString()
+                        }))
+                        setMessages(mappedHistory)
+                    } else {
+                        setMessages([{ role: 'agent', text: 'Kirtos system online. How can I assist you today?', time: new Date().toLocaleTimeString() }])
+                    }
+                }
+            } catch (err) {
+                console.error('Failed to load history:', err)
+            } finally {
+                setIsLoadingHistory(false)
+            }
+        }
+
+        fetchHistory()
+    }, [currentSessionId])
+
+    const fetchSessions = async () => {
+        try {
+            const resp = await fetch('http://localhost:3001/sessions')
+            const data = await resp.json()
+            if (data.status === 'success') {
+                setSessions(data.sessions)
+            }
+        } catch (err) {
+            console.error('Failed to fetch sessions:', err)
+        }
+    }
+
+    const startNewChat = () => {
+        const newId = `session-${Math.random().toString(36).substr(2, 9)}`
+        setCurrentSessionId(newId)
+        setShowSessions(false)
+    }
+
+    const loadSession = (id: string) => {
+        setCurrentSessionId(id)
+        setShowSessions(false)
+    }
 
     // WebSocket Connection
     useEffect(() => {
@@ -72,7 +146,7 @@ function App() {
 
         connectWS()
         return () => socketRef.current?.close()
-    }, [])
+    }, [currentSessionId])
 
     // Speech Recognition Handler
     const toggleListening = () => {
@@ -151,7 +225,7 @@ function App() {
         // Send to agent
         socketRef.current.send(JSON.stringify({
             type: 'natural-language',
-            session_id: sessionId.current,
+            session_id: currentSessionId,
             text: messageText
         }))
 
@@ -171,11 +245,50 @@ function App() {
                     <Zap size={20} className="accent-icon" />
                     <h1>KIRTOS<span>AI</span></h1>
                 </div>
-                <div className={`status-tag ${status.toLowerCase()}`}>
-                    <span className="dot"></span>
-                    {status}
+
+                <div className="header-actions">
+                    <button className="icon-btn" title="New Chat" onClick={startNewChat}>
+                        <Plus size={20} />
+                    </button>
+                    <button className={`icon-btn ${showSessions ? 'active' : ''}`} title="Chat History" onClick={() => {
+                        if (!showSessions) fetchSessions();
+                        setShowSessions(!showSessions);
+                    }}>
+                        <History size={20} />
+                    </button>
+                    <div className={`status-tag ${status.toLowerCase()}`}>
+                        <span className="dot"></span>
+                        {status}
+                    </div>
                 </div>
             </header>
+
+            {/* History Sidebar */}
+            <aside className={`history-sidebar ${showSessions ? 'open' : ''}`}>
+                <div className="sidebar-header">
+                    <h2>PAST CHATS</h2>
+                    <button onClick={() => setShowSessions(false)}><X size={20} /></button>
+                </div>
+                <div className="session-list">
+                    {sessions.length === 0 ? (
+                        <div className="empty-state">No past sessions found.</div>
+                    ) : (
+                        sessions.map(s => (
+                            <div
+                                key={s.id}
+                                className={`session-item ${s.id === currentSessionId ? 'active' : ''}`}
+                                onClick={() => loadSession(s.id)}
+                            >
+                                <Clock size={14} className="item-icon" />
+                                <div className="item-details">
+                                    <div className="item-id">{s.id.replace('session-', '')}</div>
+                                    <div className="item-date">{new Date(s.lastActivity).toLocaleDateString()}</div>
+                                </div>
+                            </div>
+                        ))
+                    )}
+                </div>
+            </aside>
 
             <main className="core-content">
                 <section className="voice-stage">
@@ -204,12 +317,16 @@ function App() {
                 <section className="chat-stage">
                     <div className="chat-container">
                         <div className="message-list scrollbar-hide">
-                            {messages.map((msg, i) => (
-                                <div key={i} className={`message-bubble ${msg.role}`}>
-                                    <div className="bubble-content">{msg.text}</div>
-                                    <div className="bubble-meta">{msg.time}</div>
-                                </div>
-                            ))}
+                            {isLoadingHistory ? (
+                                <div className="loading-history">Syncing memories...</div>
+                            ) : (
+                                messages.map((msg, i) => (
+                                    <div key={i} className={`message-bubble ${msg.role}`}>
+                                        <div className="bubble-content">{msg.text}</div>
+                                        <div className="bubble-meta">{msg.time}</div>
+                                    </div>
+                                ))
+                            )}
                             <div ref={chatEndRef} />
                         </div>
 

@@ -14,12 +14,12 @@ import json
 import os
 import pickle
 import random
-from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.svm import LinearSVC
 from sklearn.calibration import CalibratedClassifierCV
-from sklearn.pipeline import Pipeline
 from sklearn.model_selection import cross_val_score
 import numpy as np
+from datasets import load_dataset
+from sentence_transformers import SentenceTransformer
 
 # =====================================================
 # TRAINING DATA — comprehensive examples per intent
@@ -355,6 +355,62 @@ TRAINING_DATA = {
         "know any good jokes", "joke", "jokes please",
     ],
 
+    "fun.quote": [
+        "give me a quote", "random quote", "inspire me", "motivate me",
+        "say something inspirational", "give me motivation", "quote of the day",
+        "share a quote", "tell me a quote", "inspirational quote",
+        "motivational quote", "a quote please", "something motivational",
+        "i need motivation", "give me an inspiring quote", "quote me something",
+        "any good quotes", "share something inspiring", "wisdom please",
+        "give me some wisdom", "say something wise", "philosophical quote",
+    ],
+
+    "fun.fact": [
+        "tell me a fact", "random fact", "fun fact", "interesting fact",
+        "did you know", "share a fact", "give me a fact", "trivia",
+        "tell me something interesting", "fascinating fact", "cool fact",
+        "mind blowing fact", "science fact", "useless fact", "weird fact",
+        "another fact", "one more fact", "fun trivia", "random trivia",
+        "surprise me with a fact", "i want to learn something new",
+    ],
+
+    # ── Knowledge — Dictionary ────────────────────────
+    "knowledge.define": [
+        "define serendipity", "what does ephemeral mean", "meaning of kirtos",
+        "definition of algorithm", "define resilience", "what does ubiquitous mean",
+        "meaning of pragmatic", "define eloquent", "what does verbose mean",
+        "dictionary lookup for amicable", "define the word paradigm",
+        "what's the meaning of cognizant", "meaning of altruistic",
+        "define juxtaposition", "what does aesthetic mean", "meaning of benevolent",
+        "define the word ephemeral", "what is the definition of entropy",
+        "look up the word sublime", "what does serendipity mean",
+    ],
+
+    # ── Knowledge — Weather ───────────────────────────
+    "knowledge.weather": [
+        "what's the weather in delhi", "weather mumbai", "how's the weather in bangalore",
+        "weather forecast for chennai", "what's the temperature in new york",
+        "is it raining in london", "weather in tokyo", "how hot is it in dubai",
+        "what's the weather like in kolkata", "temperature in paris",
+        "weather check for pune", "how's the weather today in hyderabad",
+        "will it rain in jaipur", "weather in san francisco",
+        "what's the climate like in lucknow", "weather update for ahmedabad",
+        "current weather in sydney", "how cold is it in shimla",
+        "weather in goa", "check weather for chandigarh",
+    ],
+
+    # ── Knowledge — Currency ──────────────────────────
+    "knowledge.currency": [
+        "convert 100 USD to INR", "100 dollars in rupees", "50 EUR to USD",
+        "convert 1000 INR to USD", "how much is 200 GBP in euros",
+        "500 yen to dollars", "convert 75 USD to EUR", "1 bitcoin in usd",
+        "50 dollars to rupees", "100 euros in pounds", "convert currency",
+        "exchange rate USD to INR", "how many rupees for 10 dollars",
+        "1000 rupees in dollars", "convert 250 GBP to INR",
+        "how much is 500 USD in INR", "200 dollars to indian rupees",
+        "convert 100 CAD to USD", "50 AUD in INR", "what is 1 USD in JPY",
+    ],
+
     # ── Media ─────────────────────────────────────────
     "media.play_music": [
         "play music", "play some songs", "play my music",
@@ -630,48 +686,133 @@ def train():
             texts.append(text.lower().strip())
             labels.append(intent)
 
-    print(f"   {len(texts)} examples across {len(set(labels))} intents")
+    # Load User Corrections (Adaptive Learning)
+    corrections_path = os.path.join(os.path.dirname(__file__), "corrections.json")
+    if os.path.exists(corrections_path):
+        try:
+            with open(corrections_path, "r") as f:
+                corrections = json.load(f)
+                if corrections:
+                    print(f"📈 Incorporating {len(corrections)} user corrections...")
+                    for item in corrections:
+                        # Give corrections higher weight by duplicating them
+                        for _ in range(5):
+                            texts.append(item['text'].lower().strip())
+                            labels.append(item['intent'])
+        except Exception as e:
+            print(f"   ⚠️ Could not load corrections: {e}")
 
-    # Build the pipeline: TF-IDF + CalibratedClassifierCV(LinearSVC)
-    # CalibratedClassifierCV gives us proper probability estimates
-    pipeline = Pipeline([
-        ('tfidf', TfidfVectorizer(
-            ngram_range=(1, 3),
-            max_features=15000,
-            sublinear_tf=True,
-            strip_accents='unicode',
-            analyzer='word',
-            min_df=1,
-        )),
-        ('clf', CalibratedClassifierCV(
-            LinearSVC(
-                C=1.0,
-                class_weight='balanced',
-                max_iter=10000,
-            ),
-            cv=3,
-            method='sigmoid'
-        ))
-    ])
+    print(f"   {len(texts)} base examples across {len(set(labels))} intents")
 
-    # Cross-validation
-    print("🧪 Cross-validating (5-fold)...")
-    scores = cross_val_score(pipeline, texts, labels, cv=5, scoring='accuracy')
-    print(f"   Accuracy: {scores.mean():.1%} ± {scores.std():.1%}")
+    # Load Hugging Face dataset
+    print("📥 Loading Hugging Face dataset (Bhuvaneshwari/intent_classification)...")
+    try:
+        hf_ds = load_dataset("Bhuvaneshwari/intent_classification")
+        hf_intent_map = {
+            "Greetings": "query.greet",
+            "GetWeather": "knowledge.weather",
+            "PlayMusic": "media.play_music",
+            "SearchCreativeWork": "knowledge.search",
+            "excitment": "chat.message",
+            "Affirmation": "chat.message",
+            "Cancellation": "chat.message",
+            "BookRestaurant": "chat.message",
+            "Book Meeting": "chat.message",
+            "RateBook": "chat.message",
+            "AddToPlaylist": "media.play_music",
+            "SearchScreeningEvent": "knowledge.search"
+        }
+
+        hf_count = 0
+        for split in ['train', 'validation', 'test']:
+            for item in hf_ds[split]:
+                hf_intent = item['intent']
+                if hf_intent in hf_intent_map:
+                    texts.append(item['text'].lower().strip())
+                    labels.append(hf_intent_map[hf_intent])
+                    hf_count += 1
+        print(f"   Added {hf_count} examples from Hugging Face")
+    except Exception as e:
+        print(f"   ⚠️ Could not load HF dataset: {e}")
+
+    print(f"   Total: {len(texts)} examples after Bhuvaneshwari dataset")
+
+    # Load Second Hugging Face dataset
+    print("📥 Loading Hugging Face dataset (tanaos/synthetic-intent-classifier-dataset-v1)...")
+    try:
+        hf_ds2 = load_dataset("tanaos/synthetic-intent-classifier-dataset-v1")
+        hf_label_map2 = {
+            0: "query.greet",          # greeting
+            1: "chat.message",         # farewell
+            2: "chat.message",         # thank_you
+            3: "chat.message",         # affirmation
+            4: "chat.message",         # negation
+            5: "chat.message",         # small_talk
+            6: "query.help",          # bot_capabilities
+            7: "chat.message",         # feedback_positive
+            8: "chat.message",         # feedback_negative
+            9: "chat.message",         # clarification
+            10: "chat.message",        # suggestion
+            11: "chat.message"         # language_change
+        }
+
+        hf_count2 = 0
+        for split in hf_ds2.keys():
+            for item in hf_ds2[split]:
+                hf_label = item['labels']
+                if hf_label in hf_label_map2:
+                    texts.append(item['text'].lower().strip())
+                    labels.append(hf_label_map2[hf_label])
+                    hf_count2 += 1
+        print(f"   Added {hf_count2} examples from tanaos dataset")
+    except Exception as e:
+        print(f"   ⚠️ Could not load tanaos dataset: {e}")
+
+    print(f"   Total: {len(texts)} examples across {len(set(labels))} intents")
+
+    # Load Sentence Transformer model
+    model_name = 'all-MiniLM-L6-v2'
+    print(f"🚀 Loading Sentence Transformer ({model_name})...")
+    model = SentenceTransformer(model_name)
+
+    print("🧠 Generating embeddings (this may take a minute)...")
+    embeddings = model.encode(texts, show_progress_bar=True)
+
+    # Build the classifier: CalibratedClassifierCV(LogisticRegression)
+    print("🧪 Training classifier (LogisticRegression for speed)...")
+    from sklearn.linear_model import LogisticRegression
+    clf = CalibratedClassifierCV(
+        LogisticRegression(
+            class_weight='balanced',
+            max_iter=1000
+        ),
+        cv=3,
+        method='sigmoid'
+    )
 
     # Train on full data
-    print("🧠 Training on full dataset...")
-    pipeline.fit(texts, labels)
+    print("🧠 Training on full embedding set...")
+    clf.fit(embeddings, labels)
 
     # Save model
     model_path = os.path.join(os.path.dirname(__file__), "intent_model.pkl")
     with open(model_path, "wb") as f:
-        pickle.dump(pipeline, f)
+        pickle.dump({
+            "model_name": model_name,
+            "classifier": clf
+        }, f)
 
     print(f"✅ Model saved to {model_path}")
     print(f"   File size: {os.path.getsize(model_path) / 1024:.0f} KB")
 
-    # Quick test
+    # Quick test function for internal verification
+    def predict(text):
+        emb = model.encode([text.lower().strip()])
+        pred = clf.predict(emb)[0]
+        proba = clf.predict_proba(emb)[0]
+        confidence = float(np.max(proba))
+        return pred, confidence
+
     print("\n🧪 Quick test:")
     test_cases = [
         "send massage to Utkarsh on whatsapp that i will be late",
@@ -690,15 +831,18 @@ def train():
         "hey how are you doing",
         "turn on do not disturb",
         "run npm test",
+        "define serendipity",
+        "what's the weather in mumbai",
+        "convert 100 USD to INR",
+        "give me a quote",
+        "tell me a fun fact",
     ]
 
     for text in test_cases:
-        pred = pipeline.predict([text.lower()])[0]
-        proba = pipeline.predict_proba([text.lower()])[0]
-        confidence = float(np.max(proba))
+        pred, confidence = predict(text)
         print(f"   {'✅' if confidence > 0.3 else '⚠️ '} \"{text}\" → {pred} ({confidence:.0%})")
 
-    return pipeline
+    return clf
 
 
 if __name__ == "__main__":

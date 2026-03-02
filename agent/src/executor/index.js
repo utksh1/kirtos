@@ -70,10 +70,10 @@ const runtimeAllowlists = {
         'system.notification.show'
     ]),
     code: new Set(['network.ping', 'network.scan', 'code.run']),
-    knowledge: new Set(['knowledge.search']),
-    fun: new Set(['fun.joke']),
-    media: new Set(['media.play_music', 'media.list_music']),
-    whatsapp: new Set(['whatsapp.connect', 'whatsapp.status', 'whatsapp.send', 'whatsapp.read', 'whatsapp.disconnect'])
+    knowledge: new Set(['knowledge.search', 'knowledge.define', 'knowledge.weather', 'knowledge.currency']),
+    fun: new Set(['fun.joke', 'fun.quote', 'fun.fact']),
+    media: new Set(['media.play_music', 'media.list_music', 'media.pause', 'media.stop', 'media.resume']),
+    whatsapp: new Set(['whatsapp.connect', 'whatsapp.status', 'whatsapp.send', 'whatsapp.read', 'whatsapp.disconnect', 'whatsapp.contacts'])
 };
 
 const RUNTIME_LIMITS = {
@@ -119,14 +119,23 @@ const rolePermissions = {
         'system.notification.show',
         'query.greet',
         'knowledge.search',
+        'knowledge.define',
+        'knowledge.weather',
+        'knowledge.currency',
         'fun.joke',
+        'fun.quote',
+        'fun.fact',
         'media.play_music',
         'media.list_music',
+        'media.pause',
+        'media.stop',
+        'media.resume',
         'whatsapp.connect',
         'whatsapp.status',
         'whatsapp.send',
         'whatsapp.read',
-        'whatsapp.disconnect'
+        'whatsapp.disconnect',
+        'whatsapp.contacts'
     ]),
 
     user: new Set([
@@ -134,11 +143,20 @@ const rolePermissions = {
         'browser.open',
         'query.greet',
         'knowledge.search',
+        'knowledge.define',
+        'knowledge.weather',
+        'knowledge.currency',
         'fun.joke',
+        'fun.quote',
+        'fun.fact',
         'media.play_music',
         'media.list_music',
+        'media.pause',
+        'media.stop',
+        'media.resume',
         'whatsapp.status',
-        'whatsapp.read'
+        'whatsapp.read',
+        'whatsapp.contacts'
     ])
 };
 

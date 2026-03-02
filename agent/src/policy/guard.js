@@ -1,0 +1,91 @@
+/**
+ * ContentGuard: Scans intent parameters for "Payload-in-Text" attacks.
+ */
+class ContentGuard {
+    constructor() {
+        this.CONTEXT_RULES = {
+            url: [
+                { regex: /^(javascript:|data:|file:)/i, severity: 'CRITICAL', reasonCode: 'XSS_PROTOCOL', label: 'dangerous URL protocol' },
+                { regex: /<script/i, severity: 'CRITICAL', reasonCode: 'XSS_INJECTION', label: 'script tag in URL' }
+            ],
+            command: [
+                { regex: /(rm\s+-rf\s+\/)|(sudo\s+rm)|(mkfs)|(dd\s+if=\/dev\/zero)/i, severity: 'CRITICAL', reasonCode: 'SHELL_DESTRUCTIVE', label: 'destructive shell command' },
+                { regex: /(curl\s+.*?\s*\|\s*bash)|(wget\s+.*?\s*\|\s*sh)/i, severity: 'CRITICAL', reasonCode: 'SHELL_RCE', label: 'remote code execution pattern' }
+            ],
+            path: [
+                { regex: /\.\.\//, severity: 'HIGH', reasonCode: 'PATH_TRAVERSAL', label: 'path traversal attempt' },
+                { regex: /(\/etc\/passwd)|(\/\.ssh\/)|(\/config\/)/i, severity: 'CRITICAL', reasonCode: 'SENSITIVE_PATH', label: 'access to sensitive system path' }
+            ],
+            text: [
+                { regex: /(ignore\s+all\s+previous\s+instructions)|(system\s+prompt\s+is)|(you\s+are\s+now\s+in\s+admin\s+mode)/i, severity: 'MEDIUM', reasonCode: 'PROMPT_INJECTION', label: 'potential prompt injection' }
+            ],
+            message: [
+                { regex: /(ignore\s+all\s+previous\s+instructions)/i, severity: 'MEDIUM', reasonCode: 'PROMPT_INJECTION', label: 'potential prompt injection (message)' },
+                { regex: /(rm\s+-rf\s+\/)|(sudo\s+rm)|(mkfs)/i, severity: 'MEDIUM', reasonCode: 'SHELL_JOKE', label: 'destructive shell command in message' }
+            ]
+        };
+
+        this.GLOBAL_RULES = [
+            { regex: /(<\s*script.*?>)|(onerror\s*=)|(onclick\s*=)/i, severity: 'HIGH', reasonCode: 'XSS_INJECTION', label: 'HTML/JS injection' },
+            { regex: /(rm\s+-rf\s+\/)|(sudo\s+rm)|(mkfs)/i, severity: 'HIGH', reasonCode: 'SHELL_PAYLOAD', label: 'shell payload in non-shell field' }
+        ];
+
+        // Multi-signal scoring logic (combinations that elevate risk)
+        this.MULTI_SIGNAL_RULES = [
+            {
+                signals: [/\bcurl\b/i, /\|\s*(bash|sh|zsh)/i],
+                severity: 'CRITICAL',
+                reasonCode: 'SHELL_RCE_COMBO',
+                label: 'Combined curl + shell pipe'
+            }
+        ];
+
+        // Hard refusals: These codes bypass confirmation and always deny.
+        this.STRICT_REFUSE_CODES = ['XSS_PROTOCOL', 'SENSITIVE_PATH'];
+    }
+
+    scan(params) {
+        const hazards = [];
+        if (!params || typeof params !== 'object') return hazards;
+
+        const scanValue = (val, key = null) => {
+            if (typeof val === 'string') {
+                // 1. Contextual Rules
+                if (key && this.CONTEXT_RULES[key]) {
+                    for (const rule of this.CONTEXT_RULES[key]) {
+                        if (rule.regex.test(val)) hazards.push(this._formatHazard(rule, val));
+                    }
+                }
+
+                // 2. Global Rules
+                for (const rule of this.GLOBAL_RULES) {
+                    if (rule.regex.test(val)) hazards.push(this._formatHazard(rule, val));
+                }
+
+                // 3. Multi-signal Rules
+                for (const rule of this.MULTI_SIGNAL_RULES) {
+                    const allMatched = rule.signals.every(regex => regex.test(val));
+                    if (allMatched) {
+                        hazards.push(this._formatHazard(rule, val));
+                    }
+                }
+            } else if (typeof val === 'object' && val !== null) {
+                Object.entries(val).forEach(([childKey, childVal]) => scanValue(childVal, childKey));
+            }
+        };
+
+        scanValue(params);
+        return hazards;
+    }
+
+    _formatHazard(rule, value) {
+        return {
+            severity: rule.severity,
+            reasonCode: rule.reasonCode,
+            pattern: rule.label,
+            evidence: value.substring(0, 60) + (value.length > 60 ? '...' : '')
+        };
+    }
+}
+
+module.exports = new ContentGuard();
