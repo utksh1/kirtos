@@ -242,6 +242,29 @@ Permissions
 Risk Level
 Medium
 
+Screen Intents
+### screen.screenshot
+Capture a screenshot of the current macOS display.
+
+**Params**
+
+```json
+{
+  "mode": "full | window | interactive",
+  "format": "png | jpg",
+  "include_cursor": "boolean",
+  "copy_to_clipboard": "boolean",
+  "filename_hint": "string (max 40)"
+}
+```
+**Permissions**
+
+["ui.screen.capture"]
+
+**Risk Level**
+
+Medium
+
 Network Intents
 network.ping
 Ping a network target.

@@ -181,6 +181,24 @@ Notes:
 
 ---
 
+### Screen Permissions
+
+#### ui.screen.capture
+Allows capturing screenshots of the macOS display.
+
+Used by:
+- screen.screenshot
+
+Risk Level: Medium
+Confirmation Required: No (Risk Floor is Medium)
+
+Notes:
+- Screenshots are saved to a controlled directory (~/Library/Application Support/Kirtos/screenshots/)
+- Filenames are sanitized to prevent traversal
+- Privacy & Security permissions are enforced by macOS
+
+---
+
 ### Browser Permissions
 
 #### browser.read

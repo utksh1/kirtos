@@ -72,6 +72,7 @@ Runtime-to-executor mapping:
 | `shell` | `shell_executor` |
 | `code` | `code_executor` |
 | `browser` | `browser_executor` |
+| `screen` | `screen_executor` |
 
 Note:
 - `network.*` intents currently resolve to `code` runtime and must run under a locked network-safe profile in `code_executor`.
@@ -302,6 +303,27 @@ Network-safe profile requirements:
 - Strict target validation
 - Rate-limited requests
 - Full network activity logging
+
+---
+
+## 7) `screen_executor`
+
+Purpose:
+- Secure capture of macOS display (screenshots)
+
+Allowed intents:
+- `screen.screenshot`
+
+Allowed command surface:
+- `/usr/sbin/screencapture`
+
+Restrictions:
+- **Output Isolation**: Screenshots MUST be saved to `~/Library/Application Support/Kirtos/screenshots/`.
+- **Filename Sanitization**: Optional `filename_hint` must be sanitized to alphanumeric, underscores, and hyphens. Max length is 40 characters.
+- **Path Traversal**: No path separators or relative paths allowed in filenames.
+- **Security Check**: Process is killed on timeout (10s default).
+- **Format Control**: Only `png` and `jpg` formats allowed.
+- **Privacy Enforcement**: Relies on macOS TCC (Transparency, Consent, and Control) for "Screen Recording" permission.
 
 ---
 
