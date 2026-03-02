@@ -15,9 +15,14 @@ const mediaExecutor = require('./media');
 const whatsappExecutor = require('./whatsapp');
 const uiExecutor = require('./ui');
 const inputExecutor = require('./input');
+const windowExecutor = require('./window');
+const screenExecutor = require('./screen');
 
 
 const guardrails = require('../services/guardrails');
+const IntentRegistry = require('../policy/registry');
+const Redactor = require('../utils/redactor');
+const redactor = new Redactor();
 
 const executors = {
     system: systemExecutor,
@@ -36,7 +41,9 @@ const executors = {
     media: mediaExecutor,
     whatsapp: whatsappExecutor,
     ui: uiExecutor,
-    input: inputExecutor
+    input: inputExecutor,
+    window: windowExecutor,
+    screen: screenExecutor
 };
 
 
@@ -79,7 +86,9 @@ const runtimeAllowlists = {
     media: new Set(['media.play_music', 'media.list_music', 'media.pause', 'media.stop', 'media.resume']),
     whatsapp: new Set(['whatsapp.connect', 'whatsapp.status', 'whatsapp.send', 'whatsapp.read', 'whatsapp.disconnect', 'whatsapp.contacts']),
     ui: new Set(['ui.focus.app', 'ui.keyboard.shortcut', 'ui.type.text', 'ui.key.press']),
-    input: new Set(['input.mouse.move', 'input.mouse.click', 'input.mouse.scroll', 'input.mouse.drag'])
+    input: new Set(['input.mouse.move', 'input.mouse.click', 'input.mouse.scroll', 'input.mouse.drag']),
+    window: new Set(['window.focus.app', 'window.minimize', 'window.maximize', 'window.close', 'window.move', 'window.resize']),
+    screen: new Set(['screen.screenshot'])
 };
 
 const RUNTIME_LIMITS = {
@@ -99,7 +108,9 @@ const RUNTIME_LIMITS = {
     media: { timeout: 5000 },
     whatsapp: { timeout: 15000 },
     ui: { timeout: 5000 },
-    input: { timeout: 5000 }
+    input: { timeout: 5000 },
+    window: { timeout: 5000 },
+    screen: { timeout: 30000 }
 };
 
 const rolePermissions = {
@@ -150,7 +161,14 @@ const rolePermissions = {
         'input.mouse.move',
         'input.mouse.click',
         'input.mouse.scroll',
-        'input.mouse.drag'
+        'input.mouse.drag',
+        'window.focus.app',
+        'window.minimize',
+        'window.maximize',
+        'window.close',
+        'window.move',
+        'window.resize',
+        'screen.screenshot'
     ]),
 
     user: new Set([
@@ -187,7 +205,11 @@ const sensitiveActions = new Set([
     'ui.type.text',
     'ui.key.press',
     'input.mouse.click',
-    'input.mouse.drag'
+    'input.mouse.drag',
+    'window.close',
+    'window.move',
+    'window.resize',
+    'screen.screenshot'
 ]);
 
 function withTimeout(promise, ms) {
@@ -208,23 +230,26 @@ class Executor {
         const startTime = Date.now();
         const role = context.role || 'user';
         const session_id = context.session_id || 'untracked';
+        const trace_id = context.trace_id || 'untracked';
+        const client_id = context.client_id || 'untracked';
+        const capability_fingerprint = IntentRegistry.getFingerprint ? IntentRegistry.getFingerprint() : 'untracked';
 
         try {
             // 1. Kill Switch Check
             if (!guardrails.getExecutionStatus() && runtime !== 'chat' && intent !== 'system.kill_switch') {
-                return this._formatResponse(session_id, intent, 'denied', null, 'Execution is globally disabled.', started_at);
+                return this._formatResponse(session_id, trace_id, client_id, capability_fingerprint, intent, 'denied', null, 'Execution is globally disabled.', started_at);
             }
 
             // 2. Validate Runtime and Intent
             const allowedIntents = runtimeAllowlists[runtime];
             if (!allowedIntents || !allowedIntents.has(intent)) {
-                return this._formatResponse(session_id, intent, 'denied', null, `Intent not allowed for runtime: ${runtime}`, started_at);
+                return this._formatResponse(session_id, trace_id, client_id, capability_fingerprint, intent, 'denied', null, `Intent not allowed for runtime: ${runtime}`, started_at);
             }
 
             // 3. Permission Check
             const roleSet = rolePermissions[role];
             if (!roleSet || (!roleSet.has('*') && !roleSet.has(intent))) {
-                return this._formatResponse(session_id, intent, 'denied', null, `Permission denied for role: ${role}`, started_at);
+                return this._formatResponse(session_id, trace_id, client_id, capability_fingerprint, intent, 'denied', null, `Permission denied for role: ${role}`, started_at);
             }
 
             // 4. Rate Limiting / Cooldown
@@ -239,13 +264,13 @@ class Executor {
                 const cooldownKey = `${intent}:${key}`;
 
                 if (!guardrails.canExecute(cooldownKey)) {
-                    return this._formatResponse(session_id, intent, 'denied', null, 'Action is on cooldown.', started_at);
+                    return this._formatResponse(session_id, trace_id, client_id, capability_fingerprint, intent, 'denied', null, 'Action is on cooldown.', started_at);
                 }
             }
 
             const executor = executors[runtime];
             if (!executor || typeof executor.execute !== 'function') {
-                return this._formatResponse(session_id, intent, 'denied', null, `Unsupported runtime: ${runtime}`, started_at);
+                return this._formatResponse(session_id, trace_id, client_id, capability_fingerprint, intent, 'denied', null, `Unsupported runtime: ${runtime}`, started_at);
             }
 
             // 5. Apply Sandbox and Resource Limits (Timeout handled here)
@@ -254,10 +279,13 @@ class Executor {
 
             // Log Audit (Start)
             this._logAudit({
+                trace_id,
                 session_id,
+                client_id,
                 intent,
                 runtime,
                 execution_profile: context.execution_profile || 'safe',
+                capability_fingerprint,
                 limits,
                 event: 'start',
                 ts: started_at
@@ -271,7 +299,7 @@ class Executor {
 
             // 7. Handle sub-executor errors if they returned { error: ... }
             if (result && result.error) {
-                return this._formatResponse(session_id, intent, 'failure', null, result.error, started_at);
+                return this._formatResponse(session_id, trace_id, client_id, capability_fingerprint, intent, 'failure', null, result.error, started_at);
             }
 
             // 8. Apply Output Cap if required
@@ -279,20 +307,23 @@ class Executor {
                 result = this._applyOutputCap(result);
             }
 
-            return this._formatResponse(session_id, intent, 'success', result, null, started_at);
+            return this._formatResponse(session_id, trace_id, client_id, capability_fingerprint, intent, 'success', result, null, started_at);
 
         } catch (err) {
             const status = err.message === 'Execution timeout' ? 'timeout' : 'failure';
-            return this._formatResponse(session_id, intent, status, null, err.message, started_at);
+            return this._formatResponse(session_id, trace_id, client_id, capability_fingerprint, intent, status, null, err.message, started_at);
         }
     }
 
-    _formatResponse(session_id, intent, status, result, error, started_at) {
+    _formatResponse(session_id, trace_id, client_id, capability_fingerprint, intent, status, result, error, started_at) {
         const finished_at = new Date().toISOString();
         const duration_ms = Date.now() - new Date(started_at).getTime();
 
         const response = {
+            trace_id,
             session_id,
+            client_id,
+            capability_fingerprint,
             intent,
             status,
             result: result || {},
@@ -302,9 +333,15 @@ class Executor {
             duration_ms
         };
 
+        // Redact results for safety before logging
+        const loggableResponse = { ...response };
+        if (loggableResponse.result) {
+            loggableResponse.result = redactor.redactResult ? redactor.redactResult(intent, loggableResponse.result) : loggableResponse.result;
+        }
+
         // Final audit log for termination
         this._logAudit({
-            ...response,
+            ...loggableResponse,
             event: 'terminate'
         });
 

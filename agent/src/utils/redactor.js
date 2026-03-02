@@ -29,7 +29,7 @@ class Redactor {
             }
         }
 
-        if (intentName && (intentName.startsWith('file.') || intentName.startsWith('system.'))) {
+        if (intentName && (intentName.startsWith('file.') || intentName.startsWith('system.') || intentName.startsWith('screen.'))) {
             const pathKeys = ['path', 'filepath', 'dest', 'src'];
             pathKeys.forEach(key => {
                 if (redacted[key]) redacted[key] = this._redactPath(redacted[key]);
@@ -58,6 +58,23 @@ class Redactor {
                 }
             }
         });
+
+        return redacted;
+    }
+
+    /**
+     * Redacts the execution result from an executor to prevent leaking sensitive bytes or paths.
+     */
+    redactResult(intentName, result) {
+        if (this.mode === 'debug') return result;
+        if (!result || typeof result !== 'object') return result;
+
+        const redacted = { ...result };
+
+        if (intentName === 'screen.screenshot' && redacted.path) {
+            // Screen.screenshot returns the saved filepath
+            redacted.path = this._redactPath(redacted.path);
+        }
 
         return redacted;
     }

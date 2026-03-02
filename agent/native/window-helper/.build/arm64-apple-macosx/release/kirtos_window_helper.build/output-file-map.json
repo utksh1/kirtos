@@ -1,0 +1,13 @@
+{
+  "": {
+    "dependencies": "/Users/Apple/Desktop/n8n/gg/agent/native/window-helper/.build/arm64-apple-macosx/release/kirtos_window_helper.build/kirtos_window_helper.d",
+    "object": "/Users/Apple/Desktop/n8n/gg/agent/native/window-helper/.build/arm64-apple-macosx/release/kirtos_window_helper.build/kirtos_window_helper.o",
+    "swift-dependencies": "/Users/Apple/Desktop/n8n/gg/agent/native/window-helper/.build/arm64-apple-macosx/release/kirtos_window_helper.build/master.swiftdeps"
+  },
+  "/Users/Apple/Desktop/n8n/gg/agent/native/window-helper/Sources/main.swift": {
+    "object": "/Users/Apple/Desktop/n8n/gg/agent/native/window-helper/.build/arm64-apple-macosx/release/kirtos_window_helper.build/main.swift.o",
+    "swiftmodule": "/Users/Apple/Desktop/n8n/gg/agent/native/window-helper/.build/arm64-apple-macosx/release/kirtos_window_helper.build/main~partial.swiftmodule",
+    "swift-dependencies": "/Users/Apple/Desktop/n8n/gg/agent/native/window-helper/.build/arm64-apple-macosx/release/kirtos_window_helper.build/main.swiftdeps",
+    "diagnostics": "/Users/Apple/Desktop/n8n/gg/agent/native/window-helper/.build/arm64-apple-macosx/release/kirtos_window_helper.build/main.dia"
+  }
+}
