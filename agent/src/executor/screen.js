@@ -249,7 +249,7 @@ class ScreenExecutor {
                     const msg = stderr.trim();
                     if (msg.includes('not permitted') || msg.includes('Screen Recording')) {
                         reject(Object.assign(
-                            new Error('Screen Recording permission denied. Grant permission in System Preferences > Privacy > Screen Recording.'),
+                            new Error('Enable Screen Recording for Kirtos in System Settings \u2192 Privacy & Security \u2192 Screen Recording.'),
                             { code: 'SCREEN_PERMISSION_DENIED' }
                         ));
                     } else {

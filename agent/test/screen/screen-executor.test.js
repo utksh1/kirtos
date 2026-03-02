@@ -345,6 +345,68 @@ testAsync('executor times out after configured timeoutMs', async () => {
     assert.ok(caughtError.message.includes('10ms'), 'error message should mention timeout duration');
 });
 
+testAsync('non-zero exit triggers SCREEN_CAPTURE_FAILED', async () => {
+    const screenJsPath = require.resolve('../../src/executor/screen');
+    delete require.cache[screenJsPath];
+
+    const cp = require('node:child_process');
+    const originalSpawn = cp.spawn;
+
+    cp.spawn = function () {
+        return {
+            kill: () => { },
+            stderr: { on: (event, cb) => { if (event === 'data') cb('some error'); } },
+            on: (event, cb) => { if (event === 'close') cb(1); }
+        };
+    };
+
+    const MockedScreenExecutor = require('../../src/executor/screen');
+    let caughtError = null;
+    try {
+        await MockedScreenExecutor._runScreenCapture(['-x'], 1000);
+    } catch (err) {
+        caughtError = err;
+    } finally {
+        cp.spawn = originalSpawn;
+        delete require.cache[screenJsPath];
+    }
+
+    assert.ok(caughtError, 'should throw an error on non-zero exit');
+    assert.strictEqual(caughtError.code, 'SCREEN_CAPTURE_FAILED', 'error code should be SCREEN_CAPTURE_FAILED');
+    assert.ok(caughtError.message.includes('some error'), 'error message should contain stderr');
+});
+
+testAsync('permission denied stderr triggers SCREEN_PERMISSION_DENIED', async () => {
+    const screenJsPath = require.resolve('../../src/executor/screen');
+    delete require.cache[screenJsPath];
+
+    const cp = require('node:child_process');
+    const originalSpawn = cp.spawn;
+
+    cp.spawn = function () {
+        return {
+            kill: () => { },
+            stderr: { on: (event, cb) => { if (event === 'data') cb('Screen Recording is not permitted'); } },
+            on: (event, cb) => { if (event === 'close') cb(1); }
+        };
+    };
+
+    const MockedScreenExecutor = require('../../src/executor/screen');
+    let caughtError = null;
+    try {
+        await MockedScreenExecutor._runScreenCapture(['-x'], 1000);
+    } catch (err) {
+        caughtError = err;
+    } finally {
+        cp.spawn = originalSpawn;
+        delete require.cache[screenJsPath];
+    }
+
+    assert.ok(caughtError, 'should throw on permission denied');
+    assert.strictEqual(caughtError.code, 'SCREEN_PERMISSION_DENIED', 'code should be SCREEN_PERMISSION_DENIED');
+    assert.ok(caughtError.message.includes('Privacy & Security'), 'message should contain help instructions');
+});
+
 // ──────────────────────────────────────────────
 // Summary
 // ──────────────────────────────────────────────
