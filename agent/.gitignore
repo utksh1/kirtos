@@ -14,5 +14,5 @@ dist/
 build/
 
 # Swift Package Manager
-native/input-helper/.build/
-native/input-helper/.swiftpm/
+native/*/.build/
+native/*/.swiftpm/
