@@ -5,50 +5,50 @@ class ContentGuard {
     constructor() {
         this.CONTEXT_RULES = {
             url: [
-                { regex: /^(javascript:|data:|file:)/i, severity: 'CRITICAL', reasonCode: 'XSS_PROTOCOL', label: 'dangerous URL protocol' },
-                { regex: /<script/i, severity: 'CRITICAL', reasonCode: 'XSS_INJECTION', label: 'script tag in URL' }
+                { regex: /^(javascript:|data:|file:)/i, severity: 'critical', reasonCode: 'XSS_PROTOCOL', label: 'dangerous URL protocol' },
+                { regex: /<script/i, severity: 'critical', reasonCode: 'XSS_INJECTION', label: 'script tag in URL' }
             ],
             command: [
-                { regex: /(rm\s+-rf\s+\/)|(sudo\s+rm)|(mkfs)|(dd\s+if=\/dev\/zero)/i, severity: 'CRITICAL', reasonCode: 'SHELL_DESTRUCTIVE', label: 'destructive shell command' },
-                { regex: /(curl\s+.*?\s*\|\s*bash)|(wget\s+.*?\s*\|\s*sh)/i, severity: 'CRITICAL', reasonCode: 'SHELL_RCE', label: 'remote code execution pattern' }
+                { regex: /(rm\s+-rf\s+\/)|(sudo\s+rm)|(mkfs)|(dd\s+if=\/dev\/zero)/i, severity: 'critical', reasonCode: 'SHELL_DESTRUCTIVE', label: 'destructive shell command' },
+                { regex: /(curl\s+.*?\s*\|\s*bash)|(wget\s+.*?\s*\|\s*sh)/i, severity: 'critical', reasonCode: 'SHELL_RCE', label: 'remote code execution pattern' }
             ],
             path: [
-                { regex: /\.\.\//, severity: 'HIGH', reasonCode: 'PATH_TRAVERSAL', label: 'path traversal attempt' },
-                { regex: /(\/etc\/passwd)|(\/\.ssh\/)|(\/config\/)/i, severity: 'CRITICAL', reasonCode: 'SENSITIVE_PATH', label: 'access to sensitive system path' }
+                { regex: /\.\.\//, severity: 'high', reasonCode: 'PATH_TRAVERSAL', label: 'path traversal attempt' },
+                { regex: /(\/etc\/passwd)|(\/\.ssh\/)|(\/config\/)/i, severity: 'critical', reasonCode: 'SENSITIVE_PATH', label: 'access to sensitive system path' }
             ],
             text: [
-                { regex: /(ignore\s+all\s+previous\s+instructions)|(system\s+prompt\s+is)|(you\s+are\s+now\s+in\s+admin\s+mode)/i, severity: 'MEDIUM', reasonCode: 'PROMPT_INJECTION', label: 'potential prompt injection' }
+                { regex: /(ignore\s+all\s+previous\s+instructions)|(system\s+prompt\s+is)|(you\s+are\s+now\s+in\s+admin\s+mode)/i, severity: 'medium', reasonCode: 'PROMPT_INJECTION', label: 'potential prompt injection' }
             ],
             message: [
-                { regex: /(ignore\s+all\s+previous\s+instructions)/i, severity: 'MEDIUM', reasonCode: 'PROMPT_INJECTION', label: 'potential prompt injection (message)' },
-                { regex: /(rm\s+-rf\s+\/)|(sudo\s+rm)|(mkfs)/i, severity: 'MEDIUM', reasonCode: 'SHELL_JOKE', label: 'destructive shell command in message' }
+                { regex: /(ignore\s+all\s+previous\s+instructions)/i, severity: 'medium', reasonCode: 'PROMPT_INJECTION', label: 'potential prompt injection (message)' },
+                { regex: /(rm\s+-rf\s+\/)|(sudo\s+rm)|(mkfs)/i, severity: 'medium', reasonCode: 'SHELL_JOKE', label: 'destructive shell command in message' }
             ],
             keys: [
-                { regex: /(CMD|COMMAND)\+Q/i, severity: 'HIGH', reasonCode: 'UI_QUIT', label: 'Application Quit Shortcut' },
-                { regex: /(CMD|COMMAND)\+W/i, severity: 'MEDIUM', reasonCode: 'UI_CLOSE', label: 'Window/Tab Close Shortcut' },
-                { regex: /(CMD|COMMAND)\+(OPTION|ALT)\+ESC/i, severity: 'HIGH', reasonCode: 'UI_DESTRUCTIVE', label: 'Force Quit Shortcut' }
+                { regex: /(CMD|COMMAND)\+Q/i, severity: 'high', reasonCode: 'UI_QUIT', label: 'Application Quit Shortcut' },
+                { regex: /(CMD|COMMAND)\+W/i, severity: 'medium', reasonCode: 'UI_CLOSE', label: 'Window/Tab Close Shortcut' },
+                { regex: /(CMD|COMMAND)\+(OPTION|ALT)\+ESC/i, severity: 'high', reasonCode: 'UI_DESTRUCTIVE', label: 'Force Quit Shortcut' }
             ],
             combo: [
-                { regex: /(CMD|COMMAND)\+Q/i, severity: 'HIGH', reasonCode: 'UI_QUIT', label: 'Application Quit Shortcut' },
-                { regex: /(CMD|COMMAND)\+W/i, severity: 'MEDIUM', reasonCode: 'UI_CLOSE', label: 'Window/Tab Close Shortcut' },
-                { regex: /(CMD|COMMAND)\+(OPTION|ALT)\+ESC/i, severity: 'HIGH', reasonCode: 'UI_DESTRUCTIVE', label: 'Force Quit Shortcut' }
+                { regex: /(CMD|COMMAND)\+Q/i, severity: 'high', reasonCode: 'UI_QUIT', label: 'Application Quit Shortcut' },
+                { regex: /(CMD|COMMAND)\+W/i, severity: 'medium', reasonCode: 'UI_CLOSE', label: 'Window/Tab Close Shortcut' },
+                { regex: /(CMD|COMMAND)\+(OPTION|ALT)\+ESC/i, severity: 'high', reasonCode: 'UI_DESTRUCTIVE', label: 'Force Quit Shortcut' }
             ],
             filename_hint: [
-                { regex: /\.\./, severity: 'HIGH', reasonCode: 'PATH_TRAVERSAL', label: 'path traversal attempt in filename' },
-                { regex: /[\/\\]/, severity: 'HIGH', reasonCode: 'PATH_TRAVERSAL', label: 'directory separator in filename' }
+                { regex: /\.\./, severity: 'high', reasonCode: 'PATH_TRAVERSAL', label: 'path traversal attempt in filename' },
+                { regex: /[\/\\]/, severity: 'high', reasonCode: 'PATH_TRAVERSAL', label: 'directory separator in filename' }
             ]
         };
 
         this.GLOBAL_RULES = [
-            { regex: /(<\s*script.*?>)|(onerror\s*=)|(onclick\s*=)/i, severity: 'HIGH', reasonCode: 'XSS_INJECTION', label: 'HTML/JS injection' },
-            { regex: /(rm\s+-rf\s+\/)|(sudo\s+rm)|(mkfs)/i, severity: 'HIGH', reasonCode: 'SHELL_PAYLOAD', label: 'shell payload in non-shell field' }
+            { regex: /(<\s*script.*?>)|(onerror\s*=)|(onclick\s*=)/i, severity: 'high', reasonCode: 'XSS_INJECTION', label: 'HTML/JS injection' },
+            { regex: /(rm\s+-rf\s+\/)|(sudo\s+rm)|(mkfs)/i, severity: 'high', reasonCode: 'SHELL_PAYLOAD', label: 'shell payload in non-shell field' }
         ];
 
         // Multi-signal scoring logic (combinations that elevate risk)
         this.MULTI_SIGNAL_RULES = [
             {
                 signals: [/\bcurl\b/i, /\|\s*(bash|sh|zsh)/i],
-                severity: 'CRITICAL',
+                severity: 'critical',
                 reasonCode: 'SHELL_RCE_COMBO',
                 label: 'Combined curl + shell pipe'
             }

@@ -90,7 +90,7 @@ class PolicyEngine {
 
         if (hazards.length > 0) {
             hazardWarnings = hazards.map(h => `[${h.severity}] ${h.pattern} (${h.reasonCode})`);
-            const severityToRisk = { 'LOW': 'low', 'MEDIUM': 'medium', 'HIGH': 'high', 'CRITICAL': 'critical' };
+            const severityToRisk = { 'low': 'low', 'medium': 'medium', 'high': 'high', 'critical': 'critical' };
             for (const h of hazards) {
                 if (this.riskRank(severityToRisk[h.severity]) > this.riskRank(hazardRiskOverride)) {
                     hazardRiskOverride = severityToRisk[h.severity];

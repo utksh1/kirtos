@@ -36,7 +36,7 @@ class ScreenExecutor {
         } catch (error) {
             return {
                 status: 'error',
-                errorCode: error.code || 'EXECUTION_FAILURE',
+                errorCode: error.code || 'SCREEN_CAPTURE_FAILED',
                 message: error.message
             };
         }
@@ -46,36 +46,73 @@ class ScreenExecutor {
      * screen.screenshot — Capture macOS screenshot via `screencapture` CLI.
      */
     async _screenshot(params) {
+        // 1. Explicit Parameter Validation
         const mode = params.mode || 'full';
         const format = params.format || 'png';
         const includeCursor = params.include_cursor || false;
         const copyToClipboard = params.copy_to_clipboard || false;
         const filenameHint = params.filename_hint || null;
 
-        // 1. Ensure screenshot directory exists
-        this._ensureDirectory();
+        const validModes = ['full', 'window', 'interactive'];
+        if (!validModes.includes(mode)) {
+            return {
+                status: 'error',
+                errorCode: 'SCREEN_INVALID_PARAMS',
+                message: `Invalid mode "${mode}". Supported: ${validModes.join(', ')}`
+            };
+        }
 
-        // 2. Build safe filename
+        const validFormats = ['png', 'jpg'];
+        if (!validFormats.includes(format)) {
+            return {
+                status: 'error',
+                errorCode: 'SCREEN_INVALID_PARAMS',
+                message: `Invalid format "${format}". Supported: ${validFormats.join(', ')}`
+            };
+        }
+
+        // 2. Ensure screenshot directory exists
+        try {
+            if (!fs.existsSync(this.SCREENSHOT_DIR)) {
+                fs.mkdirSync(this.SCREENSHOT_DIR, { recursive: true });
+            }
+        } catch (err) {
+            return {
+                status: 'error',
+                errorCode: 'SCREEN_STORAGE_ERROR',
+                message: `Failed to create screenshot directory: ${err.message}`
+            };
+        }
+
+        // 3. Build safe filename
         const filename = this._buildFilename(filenameHint, format);
         const outputPath = path.join(this.SCREENSHOT_DIR, filename);
 
-        // 3. Validate path (defense-in-depth against traversal)
-        this._validatePath(outputPath);
+        // 4. Validate path (defense-in-depth against traversal)
+        try {
+            this._validatePath(outputPath);
+        } catch (err) {
+            return {
+                status: 'error',
+                errorCode: 'SCREEN_INVALID_PARAMS',
+                message: err.message
+            };
+        }
 
-        // 4. Build command arguments
+        // 5. Build command arguments
         const args = this._buildArgs(mode, format, includeCursor, copyToClipboard, outputPath);
 
-        // 5. Determine timeout based on mode
+        // 6. Determine timeout based on mode
         const timeoutMs = mode === 'interactive' ? 30000 : 5000;
 
-        // 6. Execute screencapture
+        // 7. Execute screencapture
         await this._runScreenCapture(args, timeoutMs);
 
-        // 7. Verify the file was actually created
+        // 8. Verify the file was actually created
         if (!fs.existsSync(outputPath)) {
             return {
                 status: 'error',
-                errorCode: 'CAPTURE_FAILED',
+                errorCode: 'SCREEN_CAPTURE_FAILED',
                 message: 'Screenshot command completed but file was not created'
             };
         }
@@ -89,40 +126,43 @@ class ScreenExecutor {
     }
 
     /**
-     * Ensure the controlled screenshot directory exists.
-     */
-    _ensureDirectory() {
-        if (!fs.existsSync(this.SCREENSHOT_DIR)) {
-            fs.mkdirSync(this.SCREENSHOT_DIR, { recursive: true });
-        }
-    }
-
-    /**
      * Build a sanitized filename from an optional hint plus timestamp.
      *
      * Rules:
-     * - Only [A-Za-z0-9_-] allowed in the hint
+     * - Replace non-alphanumeric with hyphens
+     * - Collapse consecutive hyphens
+     * - Trim leading/trailing hyphens
      * - Truncate to 40 characters
-     * - Always append ISO timestamp (compact)
+     * - Always append timestamp: YYYYMMDDTHHMMSS
      * - Force extension from format param
      */
     _buildFilename(hint, format) {
-        const timestamp = new Date().toISOString()
-            .replace(/[:.]/g, '')
-            .replace('T', 'T')
-            .replace('Z', '');
+        const now = new Date();
+        const timestamp = now.getFullYear().toString() +
+            (now.getMonth() + 1).toString().padStart(2, '0') +
+            now.getDate().toString().padStart(2, '0') +
+            'T' +
+            now.getHours().toString().padStart(2, '0') +
+            now.getMinutes().toString().padStart(2, '0') +
+            now.getSeconds().toString().padStart(2, '0');
 
-        let base;
+        let base = 'kirtos';
         if (hint && typeof hint === 'string') {
-            // Strip everything except A-Za-z0-9 hyphen underscore
-            const sanitized = hint.replace(/[^A-Za-z0-9\-_]/g, '');
-            // Truncate to 40 chars
-            base = sanitized.substring(0, 40);
+            // Replace non-alphanumeric (except _) with -
+            base = hint.replace(/[^A-Za-z0-9_]/g, '-')
+                // Collapse consecutive dashes
+                .replace(/-+/g, '-')
+                // Trim leading/trailing dashes
+                .replace(/^-+|-+$/g, '');
+
             if (base.length === 0) {
                 base = 'kirtos';
+            } else {
+                // Truncate to 40 chars
+                base = base.substring(0, 40);
+                // Re-trim in case truncation left a trailing dash
+                base = base.replace(/-+$/, '');
             }
-        } else {
-            base = 'kirtos';
         }
 
         const ext = format === 'jpg' ? 'jpg' : 'png';
@@ -138,10 +178,7 @@ class ScreenExecutor {
         const dirResolved = path.resolve(this.SCREENSHOT_DIR);
 
         if (!resolved.startsWith(dirResolved + path.sep) && resolved !== dirResolved) {
-            throw Object.assign(
-                new Error('Path traversal detected: screenshot path escapes controlled directory'),
-                { code: 'PATH_TRAVERSAL' }
-            );
+            throw new Error('Path traversal detected: screenshot path escapes controlled directory');
         }
     }
 
@@ -218,7 +255,7 @@ class ScreenExecutor {
                     } else {
                         reject(Object.assign(
                             new Error(msg || `screencapture failed with exit code ${code}`),
-                            { code: 'CAPTURE_FAILED' }
+                            { code: 'SCREEN_CAPTURE_FAILED' }
                         ));
                     }
                 }
@@ -228,17 +265,10 @@ class ScreenExecutor {
                 clearTimeout(timer);
                 reject(Object.assign(
                     new Error(`Failed to spawn screencapture: ${err.message}`),
-                    { code: 'SPAWN_FAILED' }
+                    { code: 'SCREEN_CAPTURE_FAILED' }
                 ));
             });
         });
-    }
-
-    /**
-     * Static helper: hash a path for audit logging (privacy-safe).
-     */
-    static hashPath(filePath) {
-        return crypto.createHash('sha256').update(filePath).digest('hex').substring(0, 16);
     }
 }
 

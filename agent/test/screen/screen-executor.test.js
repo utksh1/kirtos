@@ -60,33 +60,33 @@ console.log('\n═════════════════════�
 console.log('  Screen Executor Test Suite');
 console.log('═══════════════════════════════════════════\n');
 
-// ──────────────────────────────────────────────
 // 1. Filename Hint Sanitization
 // ──────────────────────────────────────────────
 console.log('── 1. Filename Hint Sanitization ──');
 
-test('strips unsafe characters from filename_hint', () => {
+test('replaces unsafe characters from filename_hint with hyphens', () => {
     const filename = executor._buildFilename('my<>file|name?*', 'png');
-    assert.ok(!filename.includes('<'), 'should strip <');
-    assert.ok(!filename.includes('>'), 'should strip >');
-    assert.ok(!filename.includes('|'), 'should strip |');
-    assert.ok(!filename.includes('?'), 'should strip ?');
-    assert.ok(!filename.includes('*'), 'should strip *');
-    assert.ok(filename.startsWith('myfilename-'), 'should keep safe chars');
+    assert.ok(filename.includes('-'), 'should include hyphens');
+    assert.ok(!filename.includes('<'), 'should not include <');
+    assert.ok(filename.startsWith('my-file-name-'), 'should replace unsafe with -');
     assert.ok(filename.endsWith('.png'), 'should end with .png');
 });
 
-test('strips path separators from filename_hint', () => {
+test('replaces path separators from filename_hint with hyphens', () => {
     const filename = executor._buildFilename('../../etc/passwd', 'png');
-    assert.ok(!filename.includes('/'), 'should strip /');
-    assert.ok(!filename.includes('..'), 'should strip ..');
-    assert.ok(filename.startsWith('etcpasswd-'), 'should keep alphanum');
+    assert.ok(!filename.includes('/'), 'should not include /');
+    assert.ok(filename.includes('etc-passwd'), 'should replace separators with -');
 });
 
-test('truncates hint to 40 characters', () => {
+test('collapses consecutive hyphens', () => {
+    const filename = executor._buildFilename('my---cool---shot', 'png');
+    assert.ok(filename.includes('my-cool-shot'), 'should collapse dashes');
+    assert.ok(!filename.includes('--'), 'should not contain double dashes');
+});
+
+test('truncates hint to 40 characters after normalization', () => {
     const longHint = 'a'.repeat(100);
     const filename = executor._buildFilename(longHint, 'png');
-    // Base should be max 40 chars, then hyphen, timestamp, .ext
     const parts = filename.split('-');
     assert.ok(parts[0].length <= 40, 'base should be max 40 chars');
 });
@@ -112,9 +112,16 @@ test('respects format in extension', () => {
     assert.ok(fn2.endsWith('.png'), 'png format => .png extension');
 });
 
-test('preserves hyphens and underscores in hint', () => {
-    const filename = executor._buildFilename('my-cool_shot', 'png');
-    assert.ok(filename.startsWith('my-cool_shot-'), 'should preserve - and _');
+test('preserves underscores in hint', () => {
+    const filename = executor._buildFilename('my_cool_shot', 'png');
+    assert.ok(filename.startsWith('my_cool_shot-'), 'should preserve _');
+});
+
+test('uses YYYYMMDDTHHMMSS timestamp format', () => {
+    const filename = executor._buildFilename('test', 'png');
+    const parts = filename.split('-');
+    const ts = parts[1].split('.')[0];
+    assert.ok(/^\d{8}T\d{6}$/.test(ts), `Timestamp ${ts} should be YYYYMMDDTHHMMSS`);
 });
 
 // ──────────────────────────────────────────────
@@ -205,6 +212,18 @@ test('unsupported intent returns error (does not throw)', async () => {
     const result = await executor.execute('screen.nonexistent', {});
     assert.strictEqual(result.status, 'error');
     assert.strictEqual(result.errorCode, 'UNSUPPORTED_INTENT');
+});
+
+test('invalid mode returns SCREEN_INVALID_PARAMS', async () => {
+    const result = await executor.execute('screen.screenshot', { mode: 'teleport' });
+    assert.strictEqual(result.status, 'error');
+    assert.strictEqual(result.errorCode, 'SCREEN_INVALID_PARAMS');
+});
+
+test('invalid format returns SCREEN_INVALID_PARAMS', async () => {
+    const result = await executor.execute('screen.screenshot', { format: 'gif' });
+    assert.strictEqual(result.status, 'error');
+    assert.strictEqual(result.errorCode, 'SCREEN_INVALID_PARAMS');
 });
 
 // ──────────────────────────────────────────────

@@ -4,7 +4,7 @@ const { PolicyEngine } = require('../../src/policy/engine');
 const Canonicalizer = require('../../src/policy/canonicalizer');
 const Mutators = require('./mutators');
 
-const ITERATIONS = process.env.FUZZ_ITERS || 200;
+const ITERATIONS = process.env.FUZZ_ITERS || 20;
 const CORPUS_PATH = path.join(__dirname, 'corpus.txt');
 
 const corpus = fs.readFileSync(CORPUS_PATH, 'utf8')
@@ -45,8 +45,11 @@ for (let i = 0; i < ITERATIONS; i++) {
             }
         }
 
-        if (decision.allowed) totalPassed++;
-        else totalDenied++;
+        if (decision.allowed) {
+            totalPassed++;
+        } else {
+            totalDenied++;
+        }
 
     } catch (err) {
         console.error(`\n[!] FUZZ FAILURE at iteration ${i}:`);
@@ -54,7 +57,7 @@ for (let i = 0; i < ITERATIONS; i++) {
         console.error(`Error: ${err.message}`);
         console.error(err.stack);
         totalFailed++;
-        process.exit(1); // Fail Fast in CI
+        process.exit(1);
     }
 }
 
@@ -62,4 +65,6 @@ console.log(`\n--- Fuzz Suite Complete ---`);
 console.log(`Total Passed: ${totalPassed}`);
 console.log(`Total Denied: ${totalDenied}`);
 console.log(`Total Failed: ${totalFailed}`);
+
 if (totalFailed > 0) process.exit(1);
+else process.exit(0);

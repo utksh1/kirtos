@@ -1,4 +1,3 @@
-cat <<EOF > corpus.txt
 {"type": "natural-language", "session_id": "sess-1", "text": "Send a whatsapp message to utkarsh saying hello"}
 {"type": "natural-language", "session_id": "sess-2", "text": "Open google.com"}
 {"type": "intent", "session_id": "sess-3", "intent": "browser.open", "params": {"url": "https://google.com"}}
@@ -7,4 +6,3 @@ cat <<EOF > corpus.txt
 {"type": "intent", "session_id": "sess-6", "intent": "screen.screenshot", "params": {"mode": "full", "format": "png"}}
 {"type": "intent", "session_id": "sess-7", "intent": "screen.screenshot", "params": {"mode": "window", "filename_hint": "../../etc/passwd"}}
 {"type": "intent", "session_id": "sess-8", "intent": "screen.screenshot", "params": {"mode": "full", "filename_hint": "<script>alert(1)</script>"}}
-EOF
