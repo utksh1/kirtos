@@ -1,5 +1,5 @@
 
-const { fastClassify } = require('./src/services/fast-classifier');
+const { fastClassify } = require('../src/services/fast-classifier');
 
 const TEST_CASES = [
 

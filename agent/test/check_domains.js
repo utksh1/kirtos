@@ -23,7 +23,7 @@ for (const file of files) {
 
 console.log('\nNow testing full registry load...');
 try {
-  const registry = require('./src/policy/registry');
+  const registry = require('../src/policy/registry');
   console.log('Registry loaded! Intents:', Object.keys(registry.getAll()).length);
   console.log('chat.message:', !!registry.get('chat.message'));
   console.log('device.open_app:', !!registry.get('device.open_app'));

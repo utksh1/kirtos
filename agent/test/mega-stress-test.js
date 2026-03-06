@@ -1,4 +1,4 @@
-const { fastClassify } = require('./src/services/fast-classifier');
+const { fastClassify } = require('../src/services/fast-classifier');
 
 
 const PREFIXES = [
