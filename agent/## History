@@ -1,0 +1,38 @@
+## History
+[94 Commits](https://github.com/tomwolfe/IntentionEngine/commits/main/)
+[docs](https://github.com/tomwolfe/IntentionEngine/tree/main/docs)
+[docs](https://github.com/tomwolfe/IntentionEngine/tree/main/docs)
+[src](https://github.com/tomwolfe/IntentionEngine/tree/main/src)
+[src](https://github.com/tomwolfe/IntentionEngine/tree/main/src)
+[.gitignore](https://github.com/tomwolfe/IntentionEngine/blob/main/.gitignore)
+[.gitignore](https://github.com/tomwolfe/IntentionEngine/blob/main/.gitignore)
+[LICENSE](https://github.com/tomwolfe/IntentionEngine/blob/main/LICENSE)
+[LICENSE](https://github.com/tomwolfe/IntentionEngine/blob/main/LICENSE)
+[next.config.js](https://github.com/tomwolfe/IntentionEngine/blob/main/next.config.js)
+[next.config.js](https://github.com/tomwolfe/IntentionEngine/blob/main/next.config.js)
+[package-lock.json](https://github.com/tomwolfe/IntentionEngine/blob/main/package-lock.json)
+[package-lock.json](https://github.com/tomwolfe/IntentionEngine/blob/main/package-lock.json)
+[package.json](https://github.com/tomwolfe/IntentionEngine/blob/main/package.json)
+[package.json](https://github.com/tomwolfe/IntentionEngine/blob/main/package.json)
+[postcss.config.js](https://github.com/tomwolfe/IntentionEngine/blob/main/postcss.config.js)
+[postcss.config.js](https://github.com/tomwolfe/IntentionEngine/blob/main/postcss.config.js)
+[tailwind.config.ts](https://github.com/tomwolfe/IntentionEngine/blob/main/tailwind.config.ts)
+[tailwind.config.ts](https://github.com/tomwolfe/IntentionEngine/blob/main/tailwind.config.ts)
+[test_geolocation_propagation.py](https://github.com/tomwolfe/IntentionEngine/blob/main/test_geolocation_propagation.py)
+[test_geolocation_propagation.py](https://github.com/tomwolfe/IntentionEngine/blob/main/test_geolocation_propagation.py)
+[tsconfig.json](https://github.com/tomwolfe/IntentionEngine/blob/main/tsconfig.json)
+[tsconfig.json](https://github.com/tomwolfe/IntentionEngine/blob/main/tsconfig.json)
+[vercel.json](https://github.com/tomwolfe/IntentionEngine/blob/main/vercel.json)
+[vercel.json](https://github.com/tomwolfe/IntentionEngine/blob/main/vercel.json)
+
+## Repository files navigation
+- [MIT license](https://github.com/tomwolfe/IntentionEngine)
+[MIT license](https://github.com/tomwolfe/IntentionEngine)
+
+```
+MIT License Copyright (c) 2026 Thomas Wolfe Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions: The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software. THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+```
+
+## About
+DEPRECIATED for platform-monorepo. the Steve Jobs 'Intention Engine' concept into a deterministic execution engine. It replaces unpredictable LLM chatter with a closed-loop system that parses intent, validates environmental constraints, and requires explicit user confirmation before manipulating real-world APIs
+[intention-engine.vercel.app](https://intention-engine.vercel.app)

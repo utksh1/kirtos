@@ -137,7 +137,7 @@ class PolicyEngine {
 
         // 4. Intelligence Confidence Check
         const confidence = request.confidence !== undefined ? request.confidence : 1.0;
-        if (confidence < 0.6) {
+        if (confidence < 0.3) {
             requiresConfirmation = true;
             confirmationReasons.push("the system's confidence is low");
         }
@@ -166,6 +166,7 @@ class PolicyEngine {
             risk: highestRisk,
             explanation: explanation,
             permissions: requiredPermissions,
+            params: paramsValidation.data, // Return canonicalized/validated params
             capability_fingerprint: fingerprint,
             guard_findings: hazards
         };

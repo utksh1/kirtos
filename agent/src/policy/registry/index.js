@@ -14,6 +14,7 @@ class IntentRegistry {
         this.domainPolicies = {};
         this.RESERVED_NAMESPACES = ['system', 'policy', 'internal', 'security'];
         this._loadDomains();
+        this._loadLegacyIntents();
         this._generateFingerprint();
     }
 
@@ -70,6 +71,32 @@ class IntentRegistry {
             }
         }
         console.log(`[Policy] IntentRegistry loaded ${Object.keys(this.intents).length} intents across ${Object.keys(this.domains).length} domains.`);
+    }
+
+    /**
+     * Loads intents from the legacy intents.js that aren't already
+     * registered by domain files. This ensures backward compatibility.
+     */
+    _loadLegacyIntents() {
+        try {
+            const { Intents } = require('../intents');
+            let loaded = 0;
+            for (const [name, def] of Object.entries(Intents)) {
+                if (!this.intents[name]) {
+                    this.intents[name] = {
+                        ...def,
+                        domain: '_legacy',
+                        version: '1.0.0'
+                    };
+                    loaded++;
+                }
+            }
+            if (loaded > 0) {
+                console.log(`[Policy] Loaded ${loaded} legacy intents from intents.js`);
+            }
+        } catch (err) {
+            // intents.js is optional — domains/ is the primary source
+        }
     }
 
     /**
@@ -164,6 +191,8 @@ class IntentRegistry {
                     risk: i.risk,
                     runtime: i.runtime,
                     permissions: [...i.permissions].sort(),
+                    preConditions: i.preConditions || [],
+                    postConditions: i.postConditions || [],
                     schema: schemaSummary
                 };
             }),
@@ -176,6 +205,10 @@ class IntentRegistry {
 
     get(name) {
         return this.intents[name];
+    }
+
+    getAll() {
+        return this.intents;
     }
 
     getFingerprint() {

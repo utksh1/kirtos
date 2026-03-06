@@ -24,6 +24,8 @@ function App() {
         { role: 'agent', text: 'Kirtos system online. How can I assist you today?', time: new Date().toLocaleTimeString() }
     ])
     const [status, setStatus] = useState('CONNECTING...')
+    const [retryCount, setRetryCount] = useState(0)
+    const [connectionError, setConnectionError] = useState(false)
     const [isLoadingHistory, setIsLoadingHistory] = useState(true)
     const [showSessions, setShowSessions] = useState(false)
     const [sessions, setSessions] = useState<{ id: string, lastActivity: string }[]>([])
@@ -110,16 +112,45 @@ function App() {
 
     // WebSocket Connection
     useEffect(() => {
+        let heartbeatInterval: any;
+
         const connectWS = () => {
             const ws = new WebSocket('ws://localhost:3001/ws')
 
             ws.onopen = () => {
+                console.log('[WS] Connected');
                 setStatus('CONNECTED')
+                setRetryCount(0)
+                setConnectionError(false)
                 socketRef.current = ws
+
+                // 1. Session Sync
+                ws.send(JSON.stringify({
+                    type: 'control',
+                    action: 'sync',
+                    session_id: sessionIdRef.current
+                }))
+
+                // 2. Heartbeat (Ping every 30s)
+                heartbeatInterval = setInterval(() => {
+                    if (ws.readyState === WebSocket.OPEN) {
+                        ws.send(JSON.stringify({ type: 'control', action: 'ping' }))
+                    }
+                }, 30000)
             }
 
             ws.onmessage = (event) => {
                 const data = JSON.parse(event.data)
+
+                // Handle control messages
+                if (data.type === 'control') {
+                    if (data.action === 'pong') return; // Silent heartbeat
+                    if (data.action === 'sync_ack') {
+                        console.log(`[WS] Session ${data.session_id} synced`);
+                        return;
+                    }
+                }
+
                 if (data.message) {
                     setMessages(prev => [...prev, {
                         role: 'agent',
@@ -137,15 +168,32 @@ function App() {
             }
 
             ws.onclose = () => {
+                console.log('[WS] Disconnected');
                 setStatus('DISCONNECTED')
-                setTimeout(connectWS, 3000)
+                clearInterval(heartbeatInterval)
+
+                setRetryCount(prev => {
+                    const nextCount = prev + 1
+                    if (nextCount >= 5) {
+                        setConnectionError(true)
+                    } else {
+                        setTimeout(connectWS, 3000)
+                    }
+                    return nextCount
+                })
             }
 
-            ws.onerror = () => setStatus('ERROR')
+            ws.onerror = (err) => {
+                console.error('[WS] Error:', err);
+                setStatus('ERROR')
+            }
         }
 
         connectWS()
-        return () => socketRef.current?.close()
+        return () => {
+            clearInterval(heartbeatInterval)
+            socketRef.current?.close()
+        }
     }, [currentSessionId])
 
     // Speech Recognition Handler
@@ -239,6 +287,22 @@ function App() {
     return (
         <div className="minimal-workspace">
             <div className="mesh-gradient"></div>
+
+            {connectionError && (
+                <div className="connectivity-banner">
+                    <Zap size={14} className="banner-icon" />
+                    <span>Connection lost. Multiple retry attempts failed.</span>
+                    <button onClick={() => {
+                        setRetryCount(0);
+                        setConnectionError(false);
+                        // The effect will trigger reconnection if we manually trigger a state change or if we expose connectWS
+                        // Actually, just resetting retryCount isn't enough to restart the loop if it stopped.
+                        // Better to force a re-render of the effect by bumping a dummy state or just calling connectWS if we refactor it.
+                        // For now, let's just reload the page as a robust fallback or trigger a session refresh.
+                        window.location.reload();
+                    }}>RETRY NOW</button>
+                </div>
+            )}
 
             <header className="minimal-header">
                 <div className="brand">

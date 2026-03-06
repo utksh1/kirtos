@@ -1,8 +1,16 @@
-const { exec } = require('child_process');
+const { exec, execSync } = require('child_process');
 const util = require('util');
+const ProcessPool = require('../utils/process-pool');
 const execPromise = util.promisify(exec);
 
 class CodeExecutor {
+    constructor() {
+        this.pools = {
+            python: new ProcessPool('python3', ['-i'], {}, 1),
+            node: new ProcessPool('node', ['-i'], {}, 1)
+        };
+    }
+
     async execute(intent, params) {
         switch (intent) {
             case 'network.ping':
@@ -52,6 +60,27 @@ class CodeExecutor {
     }
 
     async _runSnippet(language, code) {
+        // Preflight Check
+        try {
+            execSync(`which ${language === 'python' ? 'python3' : 'node'}`, { stdio: 'ignore' });
+        } catch (e) {
+            return { status: 'failed', error: `Preflight failed: ${language} interpreter not found.` };
+        }
+
+        const pool = this.pools[language];
+        if (pool) {
+            try {
+                const { stdout, stderr } = await pool.run(code);
+                return {
+                    status: 'success',
+                    stdout,
+                    stderr
+                };
+            } catch (err) {
+                // Fallback to exec if pool fails
+            }
+        }
+
         let command;
         switch (language) {
             case 'python':

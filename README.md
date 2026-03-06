@@ -89,6 +89,14 @@ The agent runs on `http://localhost:3001` and the UI opens at `http://localhost:
 - Intent execution uses a policy engine with role-based permissions
 - Sensitive actions (WhatsApp send, shell exec) require confirmation
 
+## 🧠 NLP Architecture
+
+Kirtos uses a 3-tier "Waterfall" Intent Classification approach for latency vs. intelligence trade-offs:
+
+1. **Fast Regex Classifier (Tier 1):** ~1ms latency. Handles simple, highly predictive commands (e.g., "Set volume to 50").
+2. **Local NLP Classifier (Tier 2):** ~5ms latency. Runs a local ML model (Python API) offline for more flexible command patterns.
+3. **LLM Fallback (Tier 3):** High latency, maximum intelligence. Uses OpenRouter / OpenAI / DigitalOcean for complex conversational interactions, context resolution, and multi-step plans.
+
 ## 🛠 Tech Stack
 
 | Layer | Technology |

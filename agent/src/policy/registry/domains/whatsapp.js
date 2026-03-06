@@ -21,7 +21,8 @@ module.exports = {
             permissions: ['communication.send'],
             risk: 'high',
             runtime: 'whatsapp',
-            category: 'messaging'
+            category: 'messaging',
+            preConditions: ['whatsapp.connected']
         },
         'status': {
             schema: z.object({}),

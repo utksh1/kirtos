@@ -110,10 +110,12 @@ class ScreenExecutor {
 
         // 8. Verify the file was actually created
         if (!fs.existsSync(outputPath)) {
+            const errorMsg = 'Screenshot command completed but file was not created';
             return {
                 status: 'error',
                 errorCode: 'SCREEN_CAPTURE_FAILED',
-                message: 'Screenshot command completed but file was not created'
+                message: errorMsg,
+                remediation: 'Check if Kirtos has Screen Recording permissions in System Settings.'
             };
         }
 
@@ -267,6 +269,25 @@ class ScreenExecutor {
                     new Error(`Failed to spawn screencapture: ${err.message}`),
                     { code: 'SCREEN_CAPTURE_FAILED' }
                 ));
+            });
+        });
+    }
+
+    /**
+     * healthCheck: Verify if the screencapture CLI is available.
+     */
+    async healthCheck() {
+        return new Promise((resolve) => {
+            const p = spawn('which', ['screencapture']);
+            p.on('close', code => {
+                if (code === 0) {
+                    resolve({ status: 'healthy', details: 'screencapture CLI available' });
+                } else {
+                    resolve({ status: 'unhealthy', errorCode: 'SCREEN_CLI_MISSING', message: 'screencapture CLI not found' });
+                }
+            });
+            p.on('error', () => {
+                resolve({ status: 'unhealthy', errorCode: 'SCREEN_CLI_MISSING', message: 'Failed to check screencapture availability' });
             });
         });
     }

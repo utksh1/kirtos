@@ -126,6 +126,20 @@ class InputExecutor extends EventEmitter {
         return this._ready && this._process !== null && !this._stopped;
     }
 
+    /**
+     * healthCheck: Check if the helper is running and ready.
+     */
+    async healthCheck() {
+        if (this._stopped) return { status: 'stopped', message: 'Input helper disabled' };
+        if (this.isReady) return { status: 'healthy', details: 'Input helper active' };
+
+        return {
+            status: 'unhealthy',
+            errorCode: InputErrorCodes.INPUT_HELPER_NOT_READY,
+            message: this._process ? 'Helper starting...' : 'Helper not running'
+        };
+    }
+
     // ─── Helper Process Management ─────────────────────────────────────────
 
     async _ensureHelper() {

@@ -10,7 +10,7 @@ module.exports = {
     domainPolicy: {
         defaultRiskFloor: 'low',
         allowedPermissions: ['system.read', 'system.write', 'system.admin'],
-        allowedExecutors: ['system']
+        allowedExecutors: ['system', 'settings']
     },
     intents: {
         'status': {
@@ -35,6 +35,15 @@ module.exports = {
             risk: 'high',
             runtime: 'system',
             category: 'security'
+        },
+        'app.open': {
+            schema: z.object({
+                app: z.string().min(1)
+            }),
+            permissions: ['system.read'],
+            risk: 'low',
+            runtime: 'settings',
+            category: 'utility'
         }
     }
 };

@@ -131,6 +131,20 @@ class WindowExecutor extends EventEmitter {
         return this._ready && this._process !== null && !this._stopped;
     }
 
+    /**
+     * healthCheck: Check if the helper is running and ready.
+     */
+    async healthCheck() {
+        if (this._stopped) return { status: 'stopped', message: 'Window helper disabled' };
+        if (this.isReady) return { status: 'healthy', details: 'Window helper active' };
+
+        return {
+            status: 'unhealthy',
+            errorCode: WindowErrorCodes.WINDOW_HELPER_NOT_READY,
+            message: this._process ? 'Helper starting...' : 'Helper not running'
+        };
+    }
+
     // ─── Helper Process Management ─────────────────────────────────────────
 
     async _ensureHelper() {

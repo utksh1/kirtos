@@ -43,6 +43,69 @@
     margin-bottom: 2rem;
 }
 
+.connectivity-banner {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    background: rgba(255, 75, 75, 0.15);
+    backdrop-filter: blur(20px);
+    border-bottom: 1px solid rgba(255, 75, 75, 0.3);
+    padding: 0.75rem 2rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 1rem;
+    z-index: 1000;
+    font-size: 0.8rem;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    color: #ff4b4b;
+    animation: slideDown 0.5s cubic-bezier(0.165, 0.84, 0.44, 1);
+}
+
+.banner-icon {
+    animation: flash 1s infinite alternate;
+}
+
+@keyframes flash {
+    from {
+        opacity: 0.4;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+@keyframes slideDown {
+    from {
+        transform: translateY(-100%);
+    }
+
+    to {
+        transform: translateY(0);
+    }
+}
+
+.connectivity-banner button {
+    background: #ff4b4b;
+    color: #fff;
+    border: none;
+    padding: 0.4rem 0.8rem;
+    border-radius: 6px;
+    font-size: 0.7rem;
+    font-weight: 800;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.connectivity-banner button:hover {
+    background: #ff6b6b;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(255, 75, 75, 0.3);
+}
+
 .brand {
     display: flex;
     align-items: center;

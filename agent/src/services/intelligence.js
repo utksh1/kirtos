@@ -2,26 +2,22 @@ const OpenAI = require('openai');
 const IntentRegistry = require('../policy/registry');
 const { fastClassify } = require('./fast-classifier');
 const fs = require('fs');
-require('dotenv').config({ override: true });
+const config = require('../config');
 
 class IntelligenceService {
     constructor() {
-        this.doAgentUrl = process.env.DO_AGENT_URL;
-        this.doAgentKey = process.env.DO_AGENT_KEY;
+        this.doAgentUrl = config.DO_AGENT_URL;
+        this.doAgentKey = config.DO_AGENT_KEY;
         this.doClient = null;
 
-        if (this.doAgentUrl && this.doAgentKey) {
+        if (this.doAgentUrl) {
             console.log(`IntelligenceService: DigitalOcean Agent @ ${this.doAgentUrl}`);
             const doBaseURL = this.doAgentUrl.endsWith('/') ? `${this.doAgentUrl}api/v1` : `${this.doAgentUrl}/api/v1`;
             this.doClient = new OpenAI({ apiKey: this.doAgentKey, baseURL: doBaseURL });
         }
 
-        const rawKey = process.env.OPENROUTER_API_KEY || process.env.OPENAI_API_KEY;
-        const apiKey = rawKey ? rawKey.trim() : null;
-
-        const rawBaseUrl = process.env.OPENAI_BASE_URL ||
-            (process.env.OPENROUTER_API_KEY ? 'https://openrouter.ai/api/v1' : undefined);
-        const baseURL = rawBaseUrl ? rawBaseUrl.trim() : undefined;
+        const apiKey = (config.OPENROUTER_API_KEY || config.OPENAI_API_KEY);
+        const baseURL = config.OPENAI_BASE_URL || (config.OPENROUTER_API_KEY ? 'https://openrouter.ai/api/v1' : undefined);
 
         this.client = null;
         if (apiKey) {
@@ -36,8 +32,11 @@ class IntelligenceService {
             });
         }
 
-        const rawModel = process.env.INTENT_MODEL || 'google/gemini-2.0-flash-lite-preview-02-05:free';
-        this.model = rawModel.trim();
+        this.model = config.INTENT_MODEL;
+
+        if (!this.doClient && !this.client) {
+            throw new Error('IntelligenceService Initialization Failed: No valid provider configured (DigitalOcean, OpenAI, or OpenRouter). Check your .env file.');
+        }
     }
 
     async parseIntent(text, history = [], currentState = {}) {
@@ -47,7 +46,7 @@ class IntelligenceService {
             console.log(`[Fast] "${text}" → ${fastResult.intent}`);
             return {
                 plan: [fastResult],
-                reasoning: `Okay, let's do that.`,
+                reasoning: this._deRobotize(fastResult.reasoning || "Okay, let's do that.", text),
                 source: 'fast-classifier'
             };
         }
@@ -64,7 +63,7 @@ class IntelligenceService {
                     params,
                     confidence: nlpResult.confidence
                 }],
-                reasoning: `I've understood your request.`,
+                reasoning: this._deRobotize("I've understood your request.", text),
                 source: 'local-nlp'
             };
         }
@@ -111,7 +110,8 @@ CONTEXT AWARENESS:
 
 STRATEGY:
 - If the user asks for multiple things ("Set volume to 50 and then open Safari"), return a LIST of intents in order.
-- If the user is just chatting, use "chat.message".
+- If the user is just chatting or greeting you, respond warmly in the 'reasoning' field. 
+- CRITICAL: NEVER use robotic templates like "Okay, let's do that." or "Understood." for greetings or chat.
 - Always provide a "reasoning" field as your ACTUAL RESPONSE to the user for the whole plan.
 
 OUTPUT FORMAT (JSON ONLY):
@@ -169,7 +169,9 @@ OUTPUT FORMAT (JSON ONLY):
                 }
             });
 
-            console.log(`[Intelligence] Plan Generated:`, JSON.stringify(result, null, 2));
+            console.log(`[Intelligence] Plan Generated from LLM:`, JSON.stringify(result, null, 2));
+            result.reasoning = this._deRobotize(result.reasoning, text);
+            console.log(`[Intelligence] User Response (reasoning): "${result.reasoning}"`);
             return result;
 
         } catch (err) {
@@ -180,9 +182,31 @@ OUTPUT FORMAT (JSON ONLY):
                     params: {},
                     confidence: 0,
                 }],
-                reasoning: `I'm having trouble retrieving that. (Error: ${err.message})`
+                reasoning: `I'm having trouble retrieving that. (Error: ${err.message})`,
+                source: 'error'
             };
         }
+    }
+
+    _deRobotize(reasoning, originalText) {
+        const reason = reasoning || "";
+        const genericRobotic = /^(okay|ok|doing\s+that|let'?s\s+do\s+that|understood|confirmed|got\s+it|sure|all\s+right|fine|understood)\b[.!]*$/i;
+
+        if (genericRobotic.test(reason.trim()) || reason.toLowerCase().trim() === originalText.toLowerCase().trim()) {
+            const lowerInput = originalText.toLowerCase();
+            if (lowerInput.match(/^(hi+|hello+|hey+|yo+|sup+|hola+|hii+|namaste|pranam)\b/i)) {
+                return "Hello! How can I assist you today?";
+            } else if (lowerInput.includes('how are you')) {
+                return "I'm doing great, thank you! Ready to help with your Mac.";
+            } else if (lowerInput.includes('play') || lowerInput.includes('youtube')) {
+                return "Sure! I am getting that ready for you.";
+            } else if (lowerInput.includes('open') || lowerInput.includes('app')) {
+                return "Understood. I am opening that for you now.";
+            } else {
+                return "I'm on it! Let's get that done.";
+            }
+        }
+        return reason;
     }
 
     async askKnowledge(query) {
@@ -288,7 +312,7 @@ OUTPUT FORMAT (JSON ONLY):
 
         if (intent === 'system.app.open' || intent === 'device.open_app') {
             const app = lower.replace(/^(?:open|launch|start)\s+(?:the\s+)?(?:app\s+)?/i, '').trim();
-            return { app };
+            return { name: app };
         }
 
         if (intent === 'knowledge.search') {
@@ -337,18 +361,27 @@ OUTPUT FORMAT (JSON ONLY):
             return await this.analyzeImage(result.path, `User asked: "${originalText}". Describe what you see in this screenshot relevant to their request.`);
         }
 
-        const fallbackMessage = result.message || (result.error ? `Error: ${result.error}` : 'Command executed.');
+        const reason = reasoning || "";
+        const lowerReason = reason.toLowerCase().trim();
 
         if (intent === 'chat.message') {
-            const reply = reasoning || params?.text || result.message || "I'm here to help!";
-            if (reply.toLowerCase().trim() === originalText.toLowerCase().trim()) {
-                const lower = originalText.toLowerCase();
-                if (lower.includes('who are you') || lower.includes('what are you')) return "I am Kirtos, your AI assistant.";
-                if (lower.includes('hi') || lower.includes('hello')) return "Hello! How can I assist you today?";
-                return "I'm not sure how to respond to that, but I'm here if you need anything else.";
+            const reply = reason || params?.text || result?.message || "I'm here to help!";
+            const genericRobotic = /^(okay|ok|doing\s+that|let'?s\s+do\s+that|understood|confirmed|got\s+it)\b/i;
+
+            const isEcho = reply.toLowerCase().trim() === originalText.toLowerCase().trim();
+            const isRobotic = genericRobotic.test(reply);
+
+            if (isEcho || isRobotic) {
+                const lowerInput = originalText.toLowerCase();
+                if (lowerInput.match(/^(hi+|hello+|hey+|yo+|sup+|hola+|hii+|namaste|pranam)\b/i)) return "Hello! How can I assist you today?";
+                if (lowerInput.includes('how are you')) return "I'm doing great, thank you! Ready to help with your Mac.";
+                if (lowerInput.includes('who are you')) return "I am Kirtos, your AI assistant.";
+                if (lowerInput.match(/^(wtf+|wow|lol+)/i)) return "Haha, yeah! Need anything else?";
+                return "I'm here and ready to help!";
             }
             return reply;
         }
+        const fallbackMessage = result?.message || (result?.error ? `Error: ${result.error}` : 'Command executed.');
         if (!this.client && !this.doClient) return fallbackMessage;
 
         const systemPrompt = `

@@ -3,7 +3,7 @@ const cors = require('@fastify/cors');
 const WebSocket = require('ws');
 const { z } = require('zod');
 const crypto = require('crypto');
-require('dotenv').config({ override: true });
+const config = require('./src/config');
 
 const { PolicyEngine } = require('./src/policy/engine');
 const TrustManager = require('./src/policy/trust');
@@ -18,7 +18,28 @@ const stateManager = require('./src/services/state');
 const Canonicalizer = require('./src/policy/canonicalizer');
 const Redactor = require('./src/utils/redactor');
 
-const redactor = new Redactor(process.env.PRIVACY_MODE || 'normal');
+const redactor = new Redactor(config.PRIVACY_MODE);
+const auditLogger = require('./src/utils/audit-logger');
+
+class StepCache {
+  constructor() {
+    this.cache = new Map(); // session_id -> { fingerprint -> result }
+  }
+
+  get(sessionId, fingerprint) {
+    if (!this.cache.has(sessionId)) return null;
+    return this.cache.get(sessionId)[fingerprint];
+  }
+
+  set(sessionId, fingerprint, result) {
+    if (!this.cache.has(sessionId)) {
+      this.cache.set(sessionId, {});
+    }
+    this.cache.get(sessionId)[fingerprint] = result;
+  }
+}
+
+const stepCache = new StepCache();
 
 fastify.get('/', async () => {
   return {
@@ -61,6 +82,7 @@ fastify.ready(() => {
         if (data.type === 'natural-language') {
           fastify.log.info({ text: data.text, transformations }, 'Processing natural language');
 
+
           const history = memoryService.get(data.session_id);
           const currentState = stateManager.get(data.session_id);
           const result = await intelligenceService.parseIntent(data.text, history, currentState);
@@ -71,8 +93,45 @@ fastify.ready(() => {
           // Evaluate the whole plan (Passes plan context for hash scoping)
           const batchDecision = PolicyEngine.evaluatePlan(plan, data.session_id, data.client_id);
 
+          // Flight Recorder: Privacy-Safe + Replayable (Capture state before possible denial/confirmation)
+          const auditTrace = {
+            trace_id: crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2),
+            timestamp: new Date().toISOString(),
+            session_id: data.session_id,
+            client_id: data.client_id,
+            privacy_mode: redactor.mode,
+            capability_fingerprint: batchDecision.capability_fingerprint,
+            type: 'natural-language',
+
+            input: {
+              hash: crypto.createHash('sha256').update(data.text).digest('hex'),
+              transformations: transformations,
+            },
+            resolved_plan: plan.map(s => ({
+              intent: s.intent,
+              params: redactor.redact(s.intent, s.params)
+            })),
+
+            policy_decisions: batchDecision.decisions.map(d => ({
+              intent: d.intent,
+              allowed: d.allowed,
+              risk: d.risk,
+              guard_findings: d.guard_findings,
+              explanation: d.explanation
+            })),
+
+            execution_results: [],
+          };
+
+          const decisionLog = `[Decision] Intent: ${batchDecision.decisions.map(d => d.intent).join(', ')} | Source: ${result.source} | Reasoning: "${result.reasoning}"`;
+          console.log(decisionLog);
+
           if (!batchDecision.allowed) {
             const denialMessage = batchDecision.explanation || `Action denied: ${batchDecision.reason}`;
+            auditTrace.denied = true;
+            auditTrace.reason = batchDecision.reason;
+            auditLogger.log(auditTrace);
+
             socket.send(JSON.stringify({
               session_id: data.session_id,
               status: 'denied',
@@ -97,57 +156,59 @@ fastify.ready(() => {
             return;
           }
 
-          // Flight Recorder: Privacy-Safe + Replayable
-          const auditTrace = {
-            trace_id: crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2),
-            timestamp: new Date().toISOString(),
-            session_id: data.session_id,
-            client_id: data.client_id,
-            privacy_mode: redactor.mode,
-            capability_fingerprint: batchDecision.capability_fingerprint,
-
-            // Replay Inputs
-            canonical_input: {
-              hash: crypto.createHash('sha256').update(data.text).digest('hex'),
-              transformations: transformations,
-            },
-            resolved_plan: plan.map(s => ({
-              intent: s.intent,
-              params: redactor.redact(s.intent, s.params)
-            })),
-
-            // Replay Logic
-            policy_decisions: batchDecision.decisions.map(d => ({
-              intent: d.intent,
-              allowed: d.allowed,
-              risk: d.risk,
-              guard_findings: d.guard_findings,
-              explanation: d.explanation
-            })),
-
-            execution_results: [],
-          };
-
           // Execute plan sequentially
           let finalSummary = result.reasoning;
           let lastResult = null;
 
-          for (const step of plan) {
-            const decision = PolicyEngine.evaluate(step, data.session_id, data.client_id, { plan });
+          for (const stepDecision of batchDecision.decisions) {
+            // Idempotency: generate fingerprint for the step
+            const fingerprint = crypto.createHash('sha256')
+              .update(JSON.stringify({ intent: stepDecision.intent, params: stepDecision.params }))
+              .digest('hex');
+
+            const cachedResult = stepCache.get(data.session_id, fingerprint);
+            if (cachedResult && cachedResult.status === 'success') {
+              fastify.log.info({ intent: stepDecision.intent, fingerprint }, 'Idempotent step skipped (cache hit)');
+              lastResult = cachedResult;
+              auditTrace.execution_results.push({
+                intent: stepDecision.intent,
+                status: 'skipped_cache',
+                duration: 0
+              });
+              continue;
+            }
+
+            // Re-evaluate in case state/trust changed during execution (e.g. step 1 affects step 2)
+            const decision = PolicyEngine.evaluate(stepDecision, data.session_id, data.client_id, { plan });
+            if (!decision.allowed) {
+              auditTrace.execution_results.push({ intent: stepDecision.intent, status: 'denied', reason: 'Mid-plan policy change' });
+              break;
+            }
 
             try {
-              lastResult = await executor.execute(decision.runtime, step.intent, step.params, { role: 'admin' });
+              // SECURITY: Always use the validated parameters from the decision
+              lastResult = await executor.execute(decision.runtime, stepDecision.intent, decision.params, {
+                role: 'admin',
+                session_id: data.session_id,
+                client_id: data.client_id,
+                trace_id: auditTrace.trace_id
+              });
+
+              // Store result in cache for idempotency
+              if (lastResult.status === 'success') {
+                stepCache.set(data.session_id, fingerprint, lastResult);
+              }
 
               auditTrace.execution_results.push({
-                intent: step.intent,
+                intent: stepDecision.intent,
                 status: lastResult.status,
-                result_redacted: (lastResult.data || lastResult.result) ? redactor.redact(step.intent, lastResult.data || lastResult.result) : null,
+                result_redacted: (lastResult.data || lastResult.result) ? redactor.redact(stepDecision.intent, lastResult.data || lastResult.result) : null,
                 duration: lastResult.duration,
                 capability_fingerprint: decision.capability_fingerprint
               });
 
               if (lastResult.status === 'success') {
-                const stateUpdates = stateManager.mapOutcomeToState(step.intent, step.params, lastResult);
+                const stateUpdates = stateManager.mapOutcomeToState(stepDecision.intent, decision.params, lastResult);
                 stateManager.update(data.session_id, stateUpdates);
               }
 
@@ -155,12 +216,13 @@ fastify.ready(() => {
 
             } catch (execErr) {
               lastResult = { status: 'failure', error: execErr.message };
-              auditTrace.execution_results.push({ intent: step.intent, error: execErr.message });
+              auditTrace.execution_results.push({ intent: stepDecision.intent, error: execErr.message });
               break;
             }
           }
 
           fastify.log.info({ audit_trace: auditTrace }, 'Flight Recorder Entry');
+          auditLogger.log(auditTrace);
 
           finalSummary = await intelligenceService.summarizeOutcome(
             data.text, plan[plan.length - 1].intent, lastResult, result.reasoning, plan[plan.length - 1].params
@@ -169,7 +231,7 @@ fastify.ready(() => {
           socket.send(JSON.stringify({
             session_id: data.session_id,
             status: (lastResult && lastResult.status === 'success') ? 'success' : 'failed',
-            message: (lastResult && lastResult.error) ? `Chain failed: ${lastResult.error}` : finalSummary,
+            message: (lastResult && lastResult.error) ? `Chain failed: ${typeof lastResult.error === 'object' ? (lastResult.error.message || lastResult.error.code || JSON.stringify(lastResult.error)) : lastResult.error}` : finalSummary,
             capability_fingerprint: batchDecision.capability_fingerprint,
             timestamp: new Date().toISOString()
           }));
@@ -185,10 +247,37 @@ fastify.ready(() => {
               TrustManager.revokeClient(data.session_id, data.client_id);
             }
             return;
+          } else if (data.action === 'ping') {
+            socket.send(JSON.stringify({ type: 'control', action: 'pong', timestamp: new Date().toISOString() }));
+            return;
+          } else if (data.action === 'sync') {
+            fastify.log.info({ session_id: data.session_id, client_id: data.client_id }, 'Session sync acknowledged');
+            socket.send(JSON.stringify({ type: 'control', action: 'sync_ack', session_id: data.session_id }));
+            return;
           }
         } else if (data.type === 'intent') {
           const decision = PolicyEngine.evaluate(data, data.session_id, data.client_id);
+
+          const auditTrace = {
+            trace_id: crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2),
+            timestamp: new Date().toISOString(),
+            session_id: data.session_id,
+            client_id: data.client_id,
+            privacy_mode: redactor.mode,
+            capability_fingerprint: decision.capability_fingerprint,
+            type: 'intent',
+            intent: data.intent,
+            params_redacted: redactor.redact(data.intent, data.params),
+            allowed: decision.allowed,
+            risk: decision.risk,
+            execution_results: []
+          };
+
           if (!decision.allowed) {
+            auditTrace.denied = true;
+            auditTrace.reason = decision.reason;
+            auditLogger.log(auditTrace);
+
             socket.send(JSON.stringify({
               status: 'denied',
               reason: decision.reason,
@@ -215,7 +304,45 @@ fastify.ready(() => {
             });
           }
 
-          const res = await executor.execute(decision.runtime, data.intent, data.params, { role: 'admin' });
+          // Idempotency check for standalone intent
+          const fingerprint = crypto.createHash('sha256')
+            .update(JSON.stringify({ intent: data.intent, params: data.params }))
+            .digest('hex');
+
+          const cachedResult = stepCache.get(data.session_id, fingerprint);
+          if (cachedResult && cachedResult.status === 'success') {
+            fastify.log.info({ intent: data.intent, fingerprint }, 'Idempotent intent skipped (cache hit)');
+            auditTrace.execution_results.push({ intent: data.intent, status: 'skipped_cache', duration: 0 });
+            socket.send(JSON.stringify({
+              session_id: data.session_id,
+              status: 'success',
+              result: cachedResult,
+              capability_fingerprint: decision.capability_fingerprint,
+              cached: true
+            }));
+            return;
+          }
+
+          const res = await executor.execute(decision.runtime, data.intent, data.params, {
+            role: 'admin',
+            session_id: data.session_id,
+            client_id: data.client_id
+          });
+
+          // Store in cache
+          if (res.status === 'success') {
+            stepCache.set(data.session_id, fingerprint, res);
+          }
+
+          auditTrace.execution_results.push({
+            intent: data.intent,
+            status: res.status,
+            result_redacted: (res.data || res.result) ? redactor.redact(data.intent, res.data || res.result) : null,
+            duration: res.duration
+          });
+
+          auditLogger.log(auditTrace);
+
           socket.send(JSON.stringify({
             session_id: data.session_id,
             status: 'success',
@@ -229,25 +356,99 @@ fastify.ready(() => {
           const sessionId = data.session_id;
 
           const batchDecision = PolicyEngine.evaluatePlan(plan, sessionId, data.client_id);
-          if (!batchDecision.allowed) return;
 
-          batchDecision.decisions.forEach(d => {
-            if (d.permissions) {
-              TrustManager.grant(sessionId, data.client_id, d.permissions, {
-                isExplicit: true,
-                grantedBy: 'plan_confirm',
-                plan: plan
-              });
-            }
-          });
+          const auditTrace = {
+            trace_id: crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2),
+            timestamp: new Date().toISOString(),
+            session_id: sessionId,
+            client_id: data.client_id,
+            privacy_mode: redactor.mode,
+            capability_fingerprint: batchDecision.capability_fingerprint,
+            type: 'plan-execute',
+            resolved_plan: plan.map(s => ({
+              intent: s.intent,
+              params: redactor.redact(s.intent, s.params)
+            })),
+            execution_results: []
+          };
+
+          if (!batchDecision.allowed) {
+            auditTrace.denied = true;
+            auditTrace.reason = batchDecision.reason;
+            auditLogger.log(auditTrace);
+
+            socket.send(JSON.stringify({
+              session_id: sessionId,
+              status: 'denied',
+              reason: batchDecision.reason,
+              explanation: batchDecision.explanation,
+              capability_fingerprint: batchDecision.capability_fingerprint
+            }));
+            return;
+          }
+
+          if (batchDecision.requires_confirmation && !data.confirmed) {
+            socket.send(JSON.stringify({
+              session_id: sessionId,
+              status: 'confirmation_required',
+              message: "I need your approval to proceed with this plan.",
+              plan: batchDecision.decisions,
+              capability_fingerprint: batchDecision.capability_fingerprint
+            }));
+            return;
+          }
+
+          if (data.confirmed) {
+            batchDecision.decisions.forEach(d => {
+              if (d.permissions) {
+                TrustManager.grant(sessionId, data.client_id, d.permissions, {
+                  isExplicit: true,
+                  grantedBy: 'plan_confirm',
+                  plan: plan // Scoped to original plan content
+                });
+              }
+            });
+          }
 
           let results = [];
-          for (const step of plan) {
-            const decision = PolicyEngine.evaluate(step, sessionId, data.client_id, { plan });
+          for (const stepDecision of batchDecision.decisions) {
+            const decision = PolicyEngine.evaluate(stepDecision, sessionId, data.client_id, { plan });
             if (!decision.allowed) break;
-            const res = await executor.execute(decision.runtime, step.intent, step.params, { role: 'admin' });
-            results.push({ intent: step.intent, result: res });
+
+            // Idempotency check for plan step
+            const fingerprint = crypto.createHash('sha256')
+              .update(JSON.stringify({ intent: stepDecision.intent, params: stepDecision.params }))
+              .digest('hex');
+
+            const cachedResult = stepCache.get(sessionId, fingerprint);
+            if (cachedResult && cachedResult.status === 'success') {
+              results.push({ intent: stepDecision.intent, result: cachedResult, cached: true });
+              auditTrace.execution_results.push({ intent: stepDecision.intent, status: 'skipped_cache', duration: 0 });
+              continue;
+            }
+
+            // SECURITY: Always use validated params from current evaluation
+            const res = await executor.execute(decision.runtime, stepDecision.intent, decision.params, {
+              role: 'admin',
+              session_id: sessionId,
+              client_id: data.client_id
+            });
+
+            if (res.status === 'success') {
+              stepCache.set(sessionId, fingerprint, res);
+            }
+
+            auditTrace.execution_results.push({
+              intent: stepDecision.intent,
+              status: res.status,
+              result_redacted: (res.data || res.result) ? redactor.redact(stepDecision.intent, res.data || res.result) : null,
+              duration: res.duration
+            });
+
+            results.push({ intent: stepDecision.intent, result: res });
           }
+
+          auditLogger.log(auditTrace);
 
           socket.send(JSON.stringify({
             session_id: sessionId,
@@ -302,7 +503,8 @@ const PlanExecuteSchema = z.object({
   type: z.literal('plan-execute'),
   session_id: z.string(),
   client_id: z.string().default('default'),
-  plan: z.array(PlanStepSchema)
+  plan: z.array(PlanStepSchema),
+  confirmed: z.boolean().optional()
 });
 
 const InputSchema = z.discriminatedUnion('type', [
@@ -311,6 +513,10 @@ const InputSchema = z.discriminatedUnion('type', [
   ControlSchema,
   PlanExecuteSchema
 ]);
+
+fastify.get('/health/executors', async () => {
+  return await executor.getHealth();
+});
 
 fastify.get('/token', async (request) => {
   const room = request.query.room || 'gg-assistant-room';
@@ -349,8 +555,8 @@ fastify.get('/sessions', async () => {
 
 const start = async () => {
   try {
-    const port = process.env.PORT || 3001;
-    await fastify.listen({ port: parseInt(port), host: '127.0.0.1' });
+    const port = config.PORT;
+    await fastify.listen({ port, host: '127.0.0.1' });
     console.log(`Kirtos agent running on http://127.0.0.1:${port}`);
   } catch (err) {
     fastify.log.error(err);

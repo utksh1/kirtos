@@ -1,7 +1,15 @@
 const CHAT_PATTERNS = [
     {
-        patterns: [/^(hi|hello|hey|howdy|yo|sup|hola|hi+|kirtos|hey\s+kirtos|hi\s+kirtos|yo\s+kirtos)\b(?:\s+there)?\s*[?.]*$/i],
+        patterns: [/^(hi+|hello+|hey+|howdy|yo+|sup+|hola|wassup|whats?up|kirtos|namaste|pranam|hii+)\b(?:\s+there)?\s*[?.]*$/i],
         response: 'Hey there! How can I help you?'
+    },
+    {
+        patterns: [/^(wtf+|wow|lol+|omg|lmao|weird|amazing|cool|nice)\b\s*[!.]*$/i],
+        response: 'Haha, yeah! Need anything else?'
+    },
+    {
+        patterns: [/^(?:play\s+it|playit)\b\s*[!.]*$/i],
+        response: 'Sure! Playing it now.'
     },
     {
         patterns: [/^(good\s*morning|good\s*afternoon|good\s*evening|good\s*night)\b\s*[?.]*$/i],
@@ -16,7 +24,7 @@ const CHAT_PATTERNS = [
         response: 'See you later!'
     },
     {
-        patterns: [/^(how\s*are\s*you|what'?s\s*up|wassup)\b\s*[?.]*$/i],
+        patterns: [/^(how\s*are\s*you(?:\s+doing|\s+today|\s+going)?|what'?s\s*up|wassup)\b\s*[?.]*$/i],
         response: "I'm running smoothly. What can I help you with?"
     },
     {
@@ -175,7 +183,7 @@ const COMMAND_RULES = [
 
     // YouTube (higher priority than generic "play" to catch "play X on youtube" first)
     {
-        priority: 8,
+        priority: 12, // High priority to beat generic "play song"
         category: 'youtube',
         confidence: 0.95,
         patterns: [/^play\s+(.+?)\s+(?:on\s+)?youtube$/i],
@@ -184,7 +192,7 @@ const COMMAND_RULES = [
         reasoning: (m) => `Playing "${m[1].trim()}" on YouTube.`
     },
     {
-        priority: 7,
+        priority: 11, // Still higher than generic "play song"
         category: 'youtube',
         confidence: 0.85,
         patterns: [/^play\s+(.+)/i],
@@ -207,8 +215,8 @@ const COMMAND_RULES = [
         category: 'app',
         confidence: 0.90,
         patterns: [/^(?:open|launch|start)\s+(.+)/i],
-        intent: 'system.app.open',
-        extract: (m) => ({ app: m[1].trim() }),
+        intent: 'device.open_app',
+        extract: (m) => ({ name: m[1].trim() }),
         reasoning: (m) => `Opening ${m[1].trim()}.`,
         guard: (m) => {
             const target = m[1].trim().toLowerCase();
@@ -768,7 +776,8 @@ COMMAND_RULES.sort((a, b) => b.priority - a.priority);
 function fastClassify(text) {
     if (!text || typeof text !== 'string') return null;
 
-    const trimmed = text.trim();
+    const textLower = text.toLowerCase();
+    const trimmed = textLower.trim();
     if (!trimmed) return null;
 
     // List of conversational prefixes and suffixes to strip
@@ -798,6 +807,7 @@ function fastClassify(text) {
                 if (match) {
                     if (rule.guard && !rule.guard(match)) continue;
 
+                    console.log(`[FastClassifier] Rule matched: ${rule.intent} (${rule.category}) | Reasoning: "${rule.reasoning(match)}"`);
                     return {
                         intent: rule.intent,
                         action: rule.intent,
@@ -816,6 +826,7 @@ function fastClassify(text) {
     for (const chatRule of CHAT_PATTERNS) {
         for (const pattern of chatRule.patterns) {
             if (pattern.test(trimmed)) {
+                console.log(`[FastClassifier] Chat matched: "${trimmed}" -> "${chatRule.response}"`);
                 return {
                     intent: 'chat.message',
                     action: 'chat.message',
