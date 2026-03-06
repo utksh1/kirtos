@@ -191,9 +191,9 @@ class MediaExecutor {
       }
     } catch (_) {
 
+
       // Permission denied or other FS error — skip silently
-    }return results;
-  }
+    }return results;}
 }
 
 module.exports = new MediaExecutor();
