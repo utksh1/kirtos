@@ -1,29 +1,29 @@
-/**
- * Unit tests for UIExecutor internals.
- * Run: node test/ui-executor.test.js
- */
+
+
+
+
 const {
-    UIErrorCodes,
-    escapeAppleScriptString,
-    validateAppName,
-    parseShortcutCombo,
-    BLOCKED_COMBOS
+  UIErrorCodes,
+  escapeAppleScriptString,
+  validateAppName,
+  parseShortcutCombo,
+  BLOCKED_COMBOS
 } = require('../src/executor/ui');
 
 let passed = 0;
 let failed = 0;
 
 function assert(condition, label) {
-    if (condition) {
-        passed++;
-        console.log(`  ✓ ${label}`);
-    } else {
-        failed++;
-        console.error(`  ✗ FAIL: ${label}`);
-    }
+  if (condition) {
+    passed++;
+    console.log(`  ✓ ${label}`);
+  } else {
+    failed++;
+    console.error(`  ✗ FAIL: ${label}`);
+  }
 }
 
-// ─── escapeAppleScriptString ───────────────────────────────────────────────────
+
 console.log('\n── escapeAppleScriptString ──');
 
 assert(escapeAppleScriptString('hello') === 'hello', 'plain string unchanged');
@@ -32,7 +32,7 @@ assert(escapeAppleScriptString('path\\to') === 'path\\\\to', 'escapes backslashe
 assert(escapeAppleScriptString('a"b\\c') === 'a\\"b\\\\c', 'escapes both quotes and backslashes');
 assert(escapeAppleScriptString('') === '', 'handles empty string');
 
-// ─── validateAppName ───────────────────────────────────────────────────────────
+
 console.log('\n── validateAppName ──');
 
 assert(validateAppName('Safari').ok === true, 'accepts "Safari"');
@@ -53,7 +53,7 @@ assert(validateAppName('App(paren)').ok === false, 'rejects parentheses');
 const invalidResult = validateAppName('bad"app');
 assert(invalidResult.errorCode === UIErrorCodes.UI_INVALID_APP_NAME, 'returns correct error code');
 
-// ─── parseShortcutCombo ────────────────────────────────────────────────────────
+
 console.log('\n── parseShortcutCombo (valid combos) ──');
 
 const cmdL = parseShortcutCombo('CMD+L');
@@ -107,10 +107,10 @@ assert(cmdW.ok === false, 'CMD+W is blocked');
 assert(cmdW.errorCode === UIErrorCodes.UI_BLOCKED_SHORTCUT, 'CMD+W returns UI_BLOCKED_SHORTCUT');
 
 const cmdOptEsc = parseShortcutCombo('CMD+OPTION+ESCAPE');
-// ESCAPE is multi-char so it fails as invalid shortcut (not a single char key)
+
 assert(cmdOptEsc.ok === false, 'CMD+OPTION+ESCAPE is rejected');
 
-// ─── BLOCKED_COMBOS set ────────────────────────────────────────────────────────
+
 console.log('\n── BLOCKED_COMBOS Set ──');
 
 assert(BLOCKED_COMBOS.has('CMD+Q'), 'CMD+Q in blocked set');
@@ -119,7 +119,7 @@ assert(BLOCKED_COMBOS.has('CMD+OPTION+ESCAPE'), 'CMD+OPTION+ESCAPE in blocked se
 assert(BLOCKED_COMBOS.has('CMD+OPTION+ESC'), 'CMD+OPTION+ESC in blocked set');
 assert(!BLOCKED_COMBOS.has('CMD+L'), 'CMD+L is NOT blocked');
 
-// ─── Summary ───────────────────────────────────────────────────────────────────
+
 console.log(`\n════════════════════════════════════════`);
 console.log(`  Total: ${passed + failed} | Passed: ${passed} | Failed: ${failed}`);
 console.log(`════════════════════════════════════════\n`);

@@ -4,7 +4,7 @@ import { useEffect, useRef, type FC } from "react";
 import { Renderer, Program, Mesh, Triangle, Vec3, type OGLRenderingContext } from "ogl";
 import { cn } from "@/lib/utils";
 
-const VERT_SHADER = /* glsl */ `
+const VERT_SHADER = `
     precision highp float;
     attribute vec2 position;
     attribute vec2 uv;
@@ -15,7 +15,7 @@ const VERT_SHADER = /* glsl */ `
     }
 `;
 
-const FRAG_SHADER = /* glsl */ `
+const FRAG_SHADER = `
     precision highp float;
 
     uniform float iTime;
@@ -164,351 +164,351 @@ const FRAG_SHADER = /* glsl */ `
 `;
 
 interface VoicePoweredOrbProps {
-    className?: string;
-    hue?: number;
-    enableVoiceControl?: boolean;
-    voiceSensitivity?: number;
-    maxRotationSpeed?: number;
-    maxHoverIntensity?: number;
-    onVoiceDetected?: (detected: boolean) => void;
+  className?: string;
+  hue?: number;
+  enableVoiceControl?: boolean;
+  voiceSensitivity?: number;
+  maxRotationSpeed?: number;
+  maxHoverIntensity?: number;
+  onVoiceDetected?: (detected: boolean) => void;
 }
 
 export const VoicePoweredOrb: FC<VoicePoweredOrbProps> = ({
-    className,
-    hue = 0,
-    enableVoiceControl = true,
-    voiceSensitivity = 1.5,
-    maxRotationSpeed = 1.2,
-    maxHoverIntensity = 0.8,
-    onVoiceDetected,
+  className,
+  hue = 0,
+  enableVoiceControl = true,
+  voiceSensitivity = 1.5,
+  maxRotationSpeed = 1.2,
+  maxHoverIntensity = 0.8,
+  onVoiceDetected
 }) => {
-    const ctnDom = useRef<HTMLDivElement>(null);
-    const audioContextRef = useRef<AudioContext | null>(null);
-    const analyserRef = useRef<AnalyserNode | null>(null);
-    const microphoneRef = useRef<MediaStreamAudioSourceNode | null>(null);
-    const dataArrayRef = useRef<Uint8Array | null>(null);
-    const mediaStreamRef = useRef<MediaStream | null>(null);
+  const ctnDom = useRef<HTMLDivElement>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const analyserRef = useRef<AnalyserNode | null>(null);
+  const microphoneRef = useRef<MediaStreamAudioSourceNode | null>(null);
+  const dataArrayRef = useRef<Uint8Array | null>(null);
+  const mediaStreamRef = useRef<MediaStream | null>(null);
 
 
-    // Voice analysis function
-    const analyzeAudio = () => {
-        if (!analyserRef.current || !dataArrayRef.current) return 0;
 
-        analyserRef.current.getByteFrequencyData(dataArrayRef.current);
+  const analyzeAudio = () => {
+    if (!analyserRef.current || !dataArrayRef.current) return 0;
 
-        // Calculate RMS (Root Mean Square) for better voice detection
-        let sum = 0;
-        for (let i = 0; i < dataArrayRef.current.length; i++) {
-            const value = dataArrayRef.current[i] / 255;
-            sum += value * value;
+    analyserRef.current.getByteFrequencyData(dataArrayRef.current);
+
+
+    let sum = 0;
+    for (let i = 0; i < dataArrayRef.current.length; i++) {
+      const value = dataArrayRef.current[i] / 255;
+      sum += value * value;
+    }
+    const rms = Math.sqrt(sum / dataArrayRef.current.length);
+
+
+    return Math.min(rms * voiceSensitivity * 3.0, 1);
+  };
+
+
+  const stopMicrophone = () => {
+    try {
+
+      if (mediaStreamRef.current) {
+        mediaStreamRef.current.getTracks().forEach((track) => {
+          track.stop();
+        });
+        mediaStreamRef.current = null;
+      }
+
+
+      if (microphoneRef.current) {
+        microphoneRef.current.disconnect();
+        microphoneRef.current = null;
+      }
+
+      if (analyserRef.current) {
+        analyserRef.current.disconnect();
+        analyserRef.current = null;
+      }
+
+
+      if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
+        audioContextRef.current.close();
+        audioContextRef.current = null;
+      }
+
+      dataArrayRef.current = null;
+      console.log('Microphone stopped and cleaned up');
+    } catch (error) {
+      console.warn('Error stopping microphone:', error);
+    }
+  };
+
+
+  const initMicrophone = async () => {
+    try {
+
+      stopMicrophone();
+
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: false,
+          noiseSuppression: false,
+          autoGainControl: false,
+          sampleRate: 44100
         }
-        const rms = Math.sqrt(sum / dataArrayRef.current.length);
+      });
 
-        // Apply sensitivity and boost the signal
-        return Math.min(rms * voiceSensitivity * 3.0, 1);
+
+      mediaStreamRef.current = stream;
+
+      audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+
+
+      if (audioContextRef.current.state === 'suspended') {
+        await audioContextRef.current.resume();
+      }
+
+      analyserRef.current = audioContextRef.current.createAnalyser();
+      microphoneRef.current = audioContextRef.current.createMediaStreamSource(stream);
+
+
+      analyserRef.current.fftSize = 512;
+      analyserRef.current.smoothingTimeConstant = 0.3;
+      analyserRef.current.minDecibels = -90;
+      analyserRef.current.maxDecibels = -10;
+
+      microphoneRef.current.connect(analyserRef.current);
+      dataArrayRef.current = new Uint8Array(analyserRef.current.frequencyBinCount);
+
+      console.log('Microphone initialized successfully');
+      return true;
+    } catch (error) {
+      console.warn("Microphone access denied or not available:", error);
+      return false;
+    }
+  };
+
+  useEffect(() => {
+    const container = ctnDom.current;
+    if (!container) return;
+
+    let rendererInstance: Renderer | null = null;
+    let glContext: WebGLRenderingContext | WebGL2RenderingContext | null = null;
+    let rafId: number;
+    let program: Program | null = null;
+
+    try {
+      rendererInstance = new Renderer({
+        alpha: true,
+        premultipliedAlpha: false,
+        antialias: true,
+        dpr: Math.min(window.devicePixelRatio || 1, 2)
+      });
+      glContext = rendererInstance.gl;
+
+      glContext.clearColor(0, 0, 0, 0);
+
+      glContext.enable(glContext.BLEND);
+      glContext.blendFunc(glContext.SRC_ALPHA, glContext.ONE_MINUS_SRC_ALPHA);
+
+
+      while (container.firstChild) {
+        container.removeChild(container.firstChild);
+      }
+      container.appendChild(glContext.canvas as unknown as Node);
+
+      const geometry = new Triangle(glContext as unknown as OGLRenderingContext);
+      program = new Program(glContext as unknown as OGLRenderingContext, {
+        vertex: VERT_SHADER,
+        fragment: FRAG_SHADER,
+        uniforms: {
+          iTime: { value: 0 },
+          iResolution: {
+            value: new Vec3(
+              glContext.canvas.width,
+              glContext.canvas.height,
+              glContext.canvas.width / glContext.canvas.height
+            )
+          },
+          hue: { value: hue },
+          hover: { value: 0 },
+          rot: { value: 0 },
+          hoverIntensity: { value: 0 }
+        }
+      });
+
+      const mesh = new Mesh(glContext, { geometry, program });
+
+      const resize = () => {
+        if (!container || !rendererInstance || !glContext) return;
+        const dpr = Math.min(window.devicePixelRatio || 1, 2);
+        const width = container.clientWidth;
+        const height = container.clientHeight;
+
+        if (width === 0 || height === 0) return;
+
+        rendererInstance.setSize(width * dpr, height * dpr);
+        const canvas = glContext.canvas as HTMLCanvasElement;
+        canvas.style.width = width + "px";
+        canvas.style.height = height + "px";
+
+        if (program) {
+          program.uniforms.iResolution.value.set(
+            glContext.canvas.width,
+            glContext.canvas.height,
+            glContext.canvas.width / glContext.canvas.height
+          );
+        }
+      };
+
+
+      let resizeTimeout: ReturnType<typeof setTimeout>;
+      const debouncedResize = () => {
+        clearTimeout(resizeTimeout);
+        resizeTimeout = setTimeout(resize, 150);
+      };
+      window.addEventListener("resize", debouncedResize, { passive: true });
+      resize();
+
+      let lastTime = 0;
+      let currentRot = 0;
+      let voiceLevel = 0;
+      const baseRotationSpeed = 0.3;
+      let isMicrophoneInitialized = false;
+
+
+      if (enableVoiceControl) {
+        initMicrophone().then(() => {
+          isMicrophoneInitialized = true;
+        });
+      } else {
+
+        stopMicrophone();
+        isMicrophoneInitialized = false;
+      }
+
+      const update = (t: number) => {
+        rafId = requestAnimationFrame(update);
+        if (!program) return;
+
+        const dt = (t - lastTime) * 0.001;
+        lastTime = t;
+        program.uniforms.iTime.value = t * 0.001;
+        program.uniforms.hue.value = hue;
+
+
+        if (enableVoiceControl && isMicrophoneInitialized) {
+          voiceLevel = analyzeAudio();
+
+
+          if (onVoiceDetected) {
+            onVoiceDetected(voiceLevel > 0.1);
+          }
+
+
+          const voiceRotationSpeed = baseRotationSpeed + voiceLevel * maxRotationSpeed * 2.0;
+
+
+          if (voiceLevel > 0.05) {
+            currentRot += dt * voiceRotationSpeed;
+          }
+
+
+          program.uniforms.hover.value = Math.min(voiceLevel * 2.0, 1.0);
+          program.uniforms.hoverIntensity.value = Math.min(voiceLevel * maxHoverIntensity * 0.8, maxHoverIntensity);
+        } else {
+
+          program.uniforms.hover.value = 0;
+          program.uniforms.hoverIntensity.value = 0;
+          if (onVoiceDetected) {
+            onVoiceDetected(false);
+          }
+        }
+
+        program.uniforms.rot.value = currentRot;
+
+        if (rendererInstance && glContext) {
+
+          glContext.clear(glContext.COLOR_BUFFER_BIT | glContext.DEPTH_BUFFER_BIT);
+          rendererInstance.render({ scene: mesh });
+        }
+      };
+
+      rafId = requestAnimationFrame(update);
+
+      return () => {
+        cancelAnimationFrame(rafId);
+        window.removeEventListener("resize", debouncedResize);
+        clearTimeout(resizeTimeout);
+
+
+        if (container && glContext && glContext.canvas) {
+          try {
+            const canvas = glContext.canvas as unknown as Node;
+            if (container.contains(canvas)) {
+              container.removeChild(canvas);
+            }
+          } catch (error) {
+            console.warn("Canvas cleanup error:", error);
+          }
+        }
+
+
+        stopMicrophone();
+
+        if (glContext) {
+          glContext.getExtension("WEBGL_lose_context")?.loseContext();
+        }
+      };
+
+    } catch (error) {
+      console.error("Error initializing Voice Powered Orb:", error);
+      if (container && container.firstChild) {
+        container.removeChild(container.firstChild);
+      }
+      return () => {
+        window.removeEventListener("resize", () => {});
+      };
+    }
+  }, [
+  hue,
+  enableVoiceControl,
+  voiceSensitivity,
+  maxRotationSpeed,
+  maxHoverIntensity]
+  );
+
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const handleMicrophoneState = async () => {
+      if (enableVoiceControl) {
+        await initMicrophone();
+        if (!isMounted) return;
+
+      } else {
+        stopMicrophone();
+      }
     };
 
-    // Stop microphone and cleanup
-    const stopMicrophone = () => {
-        try {
-            // Stop all tracks in the media stream
-            if (mediaStreamRef.current) {
-                mediaStreamRef.current.getTracks().forEach(track => {
-                    track.stop();
-                });
-                mediaStreamRef.current = null;
-            }
+    handleMicrophoneState();
 
-            // Disconnect and cleanup audio nodes
-            if (microphoneRef.current) {
-                microphoneRef.current.disconnect();
-                microphoneRef.current = null;
-            }
+    return () => {
+      isMounted = false;
 
-            if (analyserRef.current) {
-                analyserRef.current.disconnect();
-                analyserRef.current = null;
-            }
-
-            // Close audio context
-            if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
-                audioContextRef.current.close();
-                audioContextRef.current = null;
-            }
-
-            dataArrayRef.current = null;
-            console.log('Microphone stopped and cleaned up');
-        } catch (error) {
-            console.warn('Error stopping microphone:', error);
-        }
     };
+  }, [enableVoiceControl]);
 
-    // Initialize microphone access
-    const initMicrophone = async () => {
-        try {
-            // Clean up any existing microphone first
-            stopMicrophone();
+  return (
+    <div
+      ref={ctnDom}
+      className={cn(
+        "w-full h-full relative",
+        className
+      )}>
+      
 
-            const stream = await navigator.mediaDevices.getUserMedia({
-                audio: {
-                    echoCancellation: false,  // Better for voice analysis
-                    noiseSuppression: false,  // Better for voice analysis
-                    autoGainControl: false,   // Better for voice analysis
-                    sampleRate: 44100,
-                },
-            });
+        </div>);
 
-            // Store the stream reference for cleanup
-            mediaStreamRef.current = stream;
-
-            audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
-
-            // Resume audio context if needed
-            if (audioContextRef.current.state === 'suspended') {
-                await audioContextRef.current.resume();
-            }
-
-            analyserRef.current = audioContextRef.current.createAnalyser();
-            microphoneRef.current = audioContextRef.current.createMediaStreamSource(stream);
-
-            // Optimize for voice detection
-            analyserRef.current.fftSize = 512;  // Higher resolution
-            analyserRef.current.smoothingTimeConstant = 0.3;  // Less smoothing for responsiveness
-            analyserRef.current.minDecibels = -90;
-            analyserRef.current.maxDecibels = -10;
-
-            microphoneRef.current.connect(analyserRef.current);
-            dataArrayRef.current = new Uint8Array(analyserRef.current.frequencyBinCount);
-
-            console.log('Microphone initialized successfully');
-            return true;
-        } catch (error) {
-            console.warn("Microphone access denied or not available:", error);
-            return false;
-        }
-    };
-
-    useEffect(() => {
-        const container = ctnDom.current;
-        if (!container) return;
-
-        let rendererInstance: Renderer | null = null;
-        let glContext: WebGLRenderingContext | WebGL2RenderingContext | null = null;
-        let rafId: number;
-        let program: Program | null = null;
-
-        try {
-            rendererInstance = new Renderer({
-                alpha: true,
-                premultipliedAlpha: false,
-                antialias: true,
-                dpr: Math.min(window.devicePixelRatio || 1, 2) // Cap at 2x — no visual benefit above this
-            });
-            glContext = rendererInstance.gl;
-            // Set clear color to transparent to avoid white flash
-            glContext.clearColor(0, 0, 0, 0);
-            // Enable alpha blending for proper transparency
-            glContext.enable(glContext.BLEND);
-            glContext.blendFunc(glContext.SRC_ALPHA, glContext.ONE_MINUS_SRC_ALPHA);
-
-            // Clear any existing canvas
-            while (container.firstChild) {
-                container.removeChild(container.firstChild);
-            }
-            container.appendChild(glContext.canvas as unknown as Node);
-
-            const geometry = new Triangle(glContext as unknown as OGLRenderingContext);
-            program = new Program(glContext as unknown as OGLRenderingContext, {
-                vertex: VERT_SHADER,
-                fragment: FRAG_SHADER,
-                uniforms: {
-                    iTime: { value: 0 },
-                    iResolution: {
-                        value: new Vec3(
-                            glContext.canvas.width,
-                            glContext.canvas.height,
-                            glContext.canvas.width / glContext.canvas.height
-                        ),
-                    },
-                    hue: { value: hue },
-                    hover: { value: 0 },
-                    rot: { value: 0 },
-                    hoverIntensity: { value: 0 },
-                },
-            });
-
-            const mesh = new Mesh(glContext, { geometry, program });
-
-            const resize = () => {
-                if (!container || !rendererInstance || !glContext) return;
-                const dpr = Math.min(window.devicePixelRatio || 1, 2); // Cap DPR at 2x
-                const width = container.clientWidth;
-                const height = container.clientHeight;
-
-                if (width === 0 || height === 0) return;
-
-                rendererInstance.setSize(width * dpr, height * dpr);
-                const canvas = glContext.canvas as HTMLCanvasElement;
-                canvas.style.width = width + "px";
-                canvas.style.height = height + "px";
-
-                if (program) {
-                    program.uniforms.iResolution.value.set(
-                        glContext.canvas.width,
-                        glContext.canvas.height,
-                        glContext.canvas.width / glContext.canvas.height
-                    );
-                }
-            };
-
-            // Debounce resize to prevent layout thrashing
-            let resizeTimeout: ReturnType<typeof setTimeout>;
-            const debouncedResize = () => {
-                clearTimeout(resizeTimeout);
-                resizeTimeout = setTimeout(resize, 150);
-            };
-            window.addEventListener("resize", debouncedResize, { passive: true });
-            resize();
-
-            let lastTime = 0;
-            let currentRot = 0;
-            let voiceLevel = 0;
-            const baseRotationSpeed = 0.3;
-            let isMicrophoneInitialized = false;
-
-            // Initialize or stop microphone based on voice control setting
-            if (enableVoiceControl) {
-                initMicrophone().then(() => {
-                    isMicrophoneInitialized = true;
-                });
-            } else {
-                // Stop microphone when voice control is disabled
-                stopMicrophone();
-                isMicrophoneInitialized = false;
-            }
-
-            const update = (t: number) => {
-                rafId = requestAnimationFrame(update);
-                if (!program) return;
-
-                const dt = (t - lastTime) * 0.001;
-                lastTime = t;
-                program.uniforms.iTime.value = t * 0.001;
-                program.uniforms.hue.value = hue;
-
-                // Handle voice input
-                if (enableVoiceControl && isMicrophoneInitialized) {
-                    voiceLevel = analyzeAudio();
-
-                    // Notify parent component about voice detection
-                    if (onVoiceDetected) {
-                        onVoiceDetected(voiceLevel > 0.1);
-                    }
-
-                    // Map voice level to rotation speed with more visible effect
-                    const voiceRotationSpeed = baseRotationSpeed + (voiceLevel * maxRotationSpeed * 2.0);
-
-                    // Always rotate when there's voice input, even at low levels
-                    if (voiceLevel > 0.05) {
-                        currentRot += dt * voiceRotationSpeed;
-                    }
-
-                    // Use voice level to drive hover effects for visual feedback
-                    program.uniforms.hover.value = Math.min(voiceLevel * 2.0, 1.0);
-                    program.uniforms.hoverIntensity.value = Math.min(voiceLevel * maxHoverIntensity * 0.8, maxHoverIntensity);
-                } else {
-                    // Keep effects at 0 when not using voice control
-                    program.uniforms.hover.value = 0;
-                    program.uniforms.hoverIntensity.value = 0;
-                    if (onVoiceDetected) {
-                        onVoiceDetected(false);
-                    }
-                }
-
-                program.uniforms.rot.value = currentRot;
-
-                if (rendererInstance && glContext) {
-                    // Clear the canvas with transparent background before rendering
-                    glContext.clear(glContext.COLOR_BUFFER_BIT | glContext.DEPTH_BUFFER_BIT);
-                    rendererInstance.render({ scene: mesh });
-                }
-            };
-
-            rafId = requestAnimationFrame(update);
-
-            return () => {
-                cancelAnimationFrame(rafId);
-                window.removeEventListener("resize", debouncedResize);
-                clearTimeout(resizeTimeout);
-
-                // Clean up canvas safely
-                if (container && glContext && glContext.canvas) {
-                    try {
-                        const canvas = glContext.canvas as unknown as Node;
-                        if (container.contains(canvas)) {
-                            container.removeChild(canvas);
-                        }
-                    } catch (error) {
-                        console.warn("Canvas cleanup error:", error);
-                    }
-                }
-
-                // Stop microphone and clean up audio resources
-                stopMicrophone();
-
-                if (glContext) {
-                    glContext.getExtension("WEBGL_lose_context")?.loseContext();
-                }
-            };
-
-        } catch (error) {
-            console.error("Error initializing Voice Powered Orb:", error);
-            if (container && container.firstChild) {
-                container.removeChild(container.firstChild);
-            }
-            return () => {
-                window.removeEventListener("resize", () => { });
-            };
-        }
-    }, [
-        hue,
-        enableVoiceControl,
-        voiceSensitivity,
-        maxRotationSpeed,
-        maxHoverIntensity
-    ]);
-
-    // Handle microphone state changes separately
-    useEffect(() => {
-        let isMounted = true;
-
-        const handleMicrophoneState = async () => {
-            if (enableVoiceControl) {
-                await initMicrophone();
-                if (!isMounted) return;
-                // Update the microphone state in the WebGL context if needed
-            } else {
-                stopMicrophone();
-            }
-        };
-
-        handleMicrophoneState();
-
-        return () => {
-            isMounted = false;
-            // Don't stop microphone here as it will be handled by the main cleanup
-        };
-    }, [enableVoiceControl]);
-
-    return (
-        <div
-            ref={ctnDom}
-            className={cn(
-                "w-full h-full relative",
-                className
-            )}
-        >
-
-        </div>
-    );
 };
